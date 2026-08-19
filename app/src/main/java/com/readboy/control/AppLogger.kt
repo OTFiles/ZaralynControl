@@ -56,6 +56,12 @@ object AppLogger {
     fun w(msg: String) = log("W", TAG, msg)
     fun e(msg: String, tr: Throwable? = null) = log("E", TAG, msg, tr)
 
+    /** 带自定义 tag 的重载 */
+    fun d(tag: String, msg: String) = log("D", tag, msg)
+    fun i(tag: String, msg: String) = log("I", tag, msg)
+    fun w(tag: String, msg: String) = log("W", tag, msg)
+    fun e(tag: String, msg: String, tr: Throwable? = null) = log("E", tag, msg, tr)
+
     /** 获取完整日志文本 */
     fun getLogText(): String {
         synchronized(logBuffer) {

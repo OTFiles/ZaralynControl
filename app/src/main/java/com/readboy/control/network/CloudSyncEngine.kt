@@ -77,7 +77,7 @@ object CloudSyncEngine {
             }
         }
 
-        AppLogger.e(TAG, "拉取失败(已重试$MAX_RETRY次): $lastError")
+        AppLogger.e(TAG, "拉取失败(已重试${MAX_RETRY}次): $lastError")
         return@withContext CloudPullResult(false, "拉取失败: $lastError")
     }
 
@@ -238,7 +238,7 @@ object CloudSyncEngine {
             }
         }
 
-        AppLogger.e(TAG, "上传失败(已重试$MAX_RETRY次): $lastError")
+        AppLogger.e(TAG, "上传失败(已重试${MAX_RETRY}次): $lastError")
         return@withContext CloudPushResult(false, "上传失败: $lastError")
     }
 
