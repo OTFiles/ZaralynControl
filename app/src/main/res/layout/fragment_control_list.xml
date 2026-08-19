@@ -23,14 +23,12 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPullLocal"
-            style="@style/Widget.Material3.Button.Filled"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/btn_pull_local" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPushLocal"
-            style="@style/Widget.Material3.Button.Filled"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"

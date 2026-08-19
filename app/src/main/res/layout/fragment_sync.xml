@@ -32,7 +32,6 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSyncNow"
-                    style="@style/Widget.Material3.Button.Filled"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -41,7 +40,6 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCopyLog"
-                    style="@style/Widget.Material3.Button.Filled"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -57,7 +55,6 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnClearLog"
-                    style="@style/Widget.Material3.Button.Filled"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
