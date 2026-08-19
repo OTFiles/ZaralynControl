@@ -45,7 +45,7 @@ jobs:
         continue-on-error: true
 
       - name: Build Release APK
-        if: env.OTF_JKS_BASE64 != ''
+        if: ${{ secrets.OTF_JKS_BASE64 != '' }}
         run: ./gradlew assembleRelease --no-daemon 2>&1 | tee -a build-output.log
 
       - name: Upload build log on failure
@@ -56,12 +56,12 @@ jobs:
           path: build-output.log
 
       - name: Prepare release APK
-        if: env.OTF_JKS_BASE64 != ''
+        if: ${{ secrets.OTF_JKS_BASE64 != '' }}
         run: |
           mv app/build/outputs/apk/release/app-release.apk ZaralynControl-v${{ github.run_number }}.apk
 
       - name: Create GitHub Release
-        if: env.OTF_JKS_BASE64 != ''
+        if: ${{ secrets.OTF_JKS_BASE64 != '' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
