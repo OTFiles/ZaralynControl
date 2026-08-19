@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ZaralynControl</string>
+
+    <!-- 主界面 -->
+    <string name="title_control_list">管控列表</string>
+    <string name="title_password">密码管理</string>
+    <string name="title_switches">控制开关</string>
+    <string name="title_sync">同步状态</string>
+    <string name="title_settings">设置</string>
+
+    <!-- 按钮 -->
+    <string name="btn_sync_now">立即同步</string>
+    <string name="btn_pull_cloud">从云端拉取</string>
+    <string name="btn_push_cloud">上传云端</string>
+    <string name="btn_pull_local">从家长管理拉取</string>
+    <string name="btn_push_local">覆盖家长管理</string>
+    <string name="btn_add_app">添加应用</string>
+    <string name="btn_copy_log">复制日志</string>
+    <string name="btn_clear_log">清空日志</string>
+    <string name="btn_save">保存</string>
+
+    <!-- 状态 -->
+    <string name="status_ready">就绪</string>
+    <string name="status_syncing">同步中…</string>
+    <string name="status_synced">同步完成</string>
+    <string name="status_failed">同步失败: %s</string>
+    <string name="status_version">已检测到: %s</string>
+
+    <!-- 管控列表 -->
+    <string name="app_enabled">允许</string>
+    <string name="app_disabled">禁用</string>
+    <string name="app_enable">放行</string>
+    <string name="app_disable">禁用</string>
+    <string name="app_remove">移除</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_add_app_title">添加应用</string>
+    <string name="dialog_add_app_hint">输入包名</string>
+
+    <!-- 密码 -->
+    <string name="password_current">当前密码</string>
+    <string name="password_new">新密码</string>
+    <string name="password_clear">清除密码</string>
+    <string name="dialog_password_title">修改密码</string>
+
+    <!-- 设置 -->
+    <string name="setting_scan_interval">扫描间隔</string>
+    <string name="setting_scan_interval_summary">每 %d 分钟自动同步一次</string>
+    <string name="setting_auto_sync">自动同步</string>
+    <string name="setting_auto_sync_summary">后台自动同步管控列表</string>
+    <string name="setting_cloud_sync">云端同步</string>
+    <string name="setting_cloud_sync_summary">同步到云端服务器</string>
+
+    <!-- 日志 -->
+    <string name="log_title">操作日志</string>
+    <string name="log_empty">暂无日志</string>
+
+    <!-- 版本 -->
+    <string name="version_new">新版本 (install_app_list)</string>
+    <string name="version_old">老版本 (forbidden_app)</string>
+    <string name="version_unknown">未检测到家长管理</string>
+</resources>
