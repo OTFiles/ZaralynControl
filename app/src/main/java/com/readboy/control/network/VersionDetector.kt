@@ -70,6 +70,7 @@ object VersionDetector {
             AppLogger.w(TAG, "解析 authority 失败，用默认值: $AUTHORITY")
             AUTHORITY
         }
+    }
 
     /** 直接 content 查询探测版本 */
     private fun probeVersion(context: Context, auth: String): PmsVersion {
