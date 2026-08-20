@@ -6,8 +6,10 @@ import android.net.Uri
 import com.readboy.control.AppLogger
 import com.readboy.control.db.MirrorControlItem
 import com.readboy.control.db.MirrorDatabase
+import com.readboy.control.db.MirrorMeta
 import com.readboy.control.db.MirrorUserInfo
 import com.readboy.control.db.MirrorSwitchItem
+import kotlinx.coroutines.runBlocking
 
 /**
  * 本地同步引擎：镜像库 ↔ 家长管理 ContentProvider
@@ -139,6 +141,9 @@ object SyncEngine {
                 installAppListUri(auth), null, null, null, null
             )
             cursor?.use {
+                // 检测数据库表结构变化
+                detectSchemaChanges(context, auth, it)
+
                 val idxPkg = it.getColumnIndex("package_name") ?: -1
                 val idxName = it.getColumnIndex("app_name") ?: -1
                 val idxDs = it.getColumnIndex("disabled_state") ?: -1
@@ -165,6 +170,48 @@ object SyncEngine {
             AppLogger.e(TAG, "拉取 install_app_list 失败: ${e.message}", e)
         }
         return list
+    }
+
+    /**
+     * 检测数据库表结构变化，记录到 mirror_meta
+     * 当家长管理 App 更新后新增/删除列时，自动检测并告警
+     */
+    private fun detectSchemaChanges(context: Context, auth: String, cursor: android.database.Cursor) {
+        try {
+            val columnNames = cursor.columnNames?.toList() ?: return
+            val name = columnNames.joinToString(",")
+            val db = MirrorDatabase.getInstance(context)
+            kotlinx.coroutines.runBlocking {
+                val lastSchema = db.metaDao().get("install_app_list_schema")
+                if (lastSchema != name) {
+                    // 记录当前 schema
+                    db.metaDao().put(
+                        com.readboy.control.db.MirrorMeta(
+                            key = "install_app_list_schema",
+                            value = name
+                        )
+                    )
+                    if (lastSchema == null) {
+                        AppLogger.i(TAG, "首次检测到 install_app_list 表结构: ${columnNames.size} 列")
+                    } else {
+                        val lastCols = lastSchema.split(",")
+                        val newCols = columnNames - lastCols.toSet()
+                        val removedCols = lastCols - columnNames.toSet()
+                        if (newCols.isNotEmpty()) {
+                            AppLogger.w(TAG, "⚠️ 家长管理数据库新增列: ${newCols.joinToString(",")}（已自动适配）")
+                        }
+                        if (removedCols.isNotEmpty()) {
+                            AppLogger.w(TAG, "⚠️ 家长管理数据库移除列: ${removedCols.joinToString(",")}（可能影响功能）")
+                        }
+                        if (newCols.isEmpty() && removedCols.isEmpty()) {
+                            AppLogger.d(TAG, "install_app_list 表结构无变化")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.d(TAG, "检测表结构失败: ${e.message}")
+        }
     }
 
     private suspend fun pushInstallAppItem(context: Context, auth: String, item: MirrorControlItem) {
