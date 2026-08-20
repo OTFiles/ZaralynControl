@@ -13,6 +13,7 @@ import com.readboy.control.R
 import com.readboy.control.db.MirrorDatabase
 import com.readboy.control.db.MirrorUserInfo
 import com.readboy.control.network.CloudSyncEngine
+import com.readboy.control.network.DeviceUtil
 import com.readboy.control.network.SyncEngine
 import com.readboy.control.network.VersionDetector
 import kotlinx.coroutines.CoroutineScope
@@ -89,16 +90,21 @@ class PasswordFragment : Fragment() {
         // 云端拉取
         btnPullCloud.setOnClickListener {
             scope.launch {
-                val imei = getDeviceSerial()
-                if (imei == null) {
-                    Toast.makeText(requireContext(), "无法获取设备序列号，请授予 READ_PHONE_STATE 权限", Toast.LENGTH_LONG).show()
+                val imei = DeviceUtil.getEffectiveSerial()
+                if (imei.isNullOrEmpty()) {
+                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写或授权 READ_PHONE_STATE", Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                Toast.makeText(requireContext(), "正在拉取云端配置...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "正在拉取云端配置 (imei=$imei)...", Toast.LENGTH_SHORT).show()
                 val result = CloudSyncEngine.pullFromCloud(imei)
                 if (result.success && result.responseBody != null) {
-                    CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
-                    Toast.makeText(requireContext(), "云端配置已拉取", Toast.LENGTH_LONG).show()
+                    if (!DeviceUtil.isRemoteMode()) {
+                        CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
+                        Toast.makeText(requireContext(), "云端配置已拉取并更新镜像库", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(requireContext(), "远程模式：云端请求成功，未修改本地数据库", Toast.LENGTH_LONG).show()
+                    }
+                    AppLogger.i("PasswordFragment", "云端拉取成功: ${result.responseBody.take(200)}")
                 } else {
                     Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
                 }
@@ -108,12 +114,12 @@ class PasswordFragment : Fragment() {
         // 云端上传
         btnPushCloud.setOnClickListener {
             scope.launch {
-                val imei = getDeviceSerial()
-                if (imei == null) {
-                    Toast.makeText(requireContext(), "无法获取设备序列号，请授予 READ_PHONE_STATE 权限", Toast.LENGTH_LONG).show()
+                val imei = DeviceUtil.getEffectiveSerial()
+                if (imei.isNullOrEmpty()) {
+                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写或授权 READ_PHONE_STATE", Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                Toast.makeText(requireContext(), "正在上传到云端...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "正在上传到云端 (imei=$imei)...", Toast.LENGTH_SHORT).show()
                 val result = CloudSyncEngine.pushToCloud(imei)
                 Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
             }

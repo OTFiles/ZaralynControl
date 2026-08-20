@@ -11,6 +11,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.readboy.control.AppLogger
 import com.readboy.control.network.CloudSyncEngine
+import com.readboy.control.network.DeviceUtil
 import com.readboy.control.network.SyncEngine
 import com.readboy.control.network.VersionDetector
 import java.util.concurrent.TimeUnit
@@ -51,7 +52,7 @@ class SyncWorker(
             // 3. 云端上传（如果开启）
             val cloudSyncEnabled = prefs.getBoolean("cloud_sync_enabled", false)
             if (cloudSyncEnabled) {
-                val imei = getDeviceSerial()
+                val imei = DeviceUtil.getEffectiveSerial()
                 if (imei != null) {
                     val cloudResult = runBlockingSync {
                         CloudSyncEngine.pushToCloud(imei)

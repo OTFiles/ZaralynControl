@@ -1,5 +1,6 @@
 package com.readboy.control.network
 
+import android.content.Context
 import com.readboy.control.AppLogger
 import com.readboy.control.db.MirrorControlItem
 import com.readboy.control.db.MirrorDatabase
@@ -33,15 +34,25 @@ object CloudSyncEngine {
 
     /**
      * 从云端全量拉取管控配置
+     * @param imei 设备序列号。null 时使用 DeviceUtil.getEffectiveSerial()（优先自定义远程序列号）
+     * @param saveToLocalDb 是否写入本地镜像库（远程模式=false，仅发请求）
      */
-    suspend fun pullFromCloud(imei: String): CloudPullResult = withContext(Dispatchers.IO) {
-        AppLogger.i(TAG, "===== 开始从云端拉取配置 =====")
+    suspend fun pullFromCloud(
+        imei: String? = null,
+        saveToLocalDb: Boolean = !DeviceUtil.isRemoteMode()
+    ): CloudPullResult = withContext(Dispatchers.IO) {
+        val effectiveImei = imei ?: DeviceUtil.getEffectiveSerial()
+        if (effectiveImei.isNullOrEmpty()) {
+            AppLogger.e(TAG, "无法获取设备序列号，无法拉取云端配置")
+            return@withContext CloudPullResult(false, "无法获取设备序列号")
+        }
+        AppLogger.i(TAG, "===== 开始从云端拉取配置 (imei=$effectiveImei, saveToLocalDb=$saveToLocalDb) =====")
         var lastError: String? = null
 
         for (attempt in 1..MAX_RETRY) {
             try {
                 val timestampMs = System.currentTimeMillis()
-                val queryString = SignUtil.getCommonQueryString(imei, timestampMs) + "&get_all=1"
+                val queryString = SignUtil.getCommonQueryString(effectiveImei, timestampMs) + "&get_all=1"
                 val url = URL("$JPUSH_URL?$queryString")
 
                 val conn = url.openConnection() as HttpURLConnection
@@ -95,15 +106,15 @@ object CloudSyncEngine {
                 return
             }
 
-            // 更新管控列表
-            response.control_list?.let { list ->
+            // 更新管控列表（实测修正：control_list 在 data.app_control 内）
+            response.data?.app_control?.control_list?.let { list ->
                 db.controlListDao().clear()
                 val items = list.mapNotNull { item ->
                     if (item.pack_name.isNullOrBlank()) return@mapNotNull null
                     MirrorControlItem(
                         package_name = item.pack_name,
                         app_name = item.app_name,
-                        // 云端 status=1=放行 → 本地 disabled_state=0
+                        // 实测修正：status={0,2} 都禁用，仅 status=1 放行
                         disabled_state = if (item.status == 1) 0 else 1,
                         app_type = item.app_type ?: 0,
                         sync_status = 1
@@ -112,11 +123,13 @@ object CloudSyncEngine {
                 if (items.isNotEmpty()) {
                     db.controlListDao().insertAll(items)
                     AppLogger.i(TAG, "更新镜像库: ${items.size} 项管控列表")
+                } else {
+                    AppLogger.w(TAG, "control_list 为空或全部无包名，跳过（空列表设备端不处理）")
                 }
-            }
+            } ?: AppLogger.w(TAG, "响应中无 data.app_control.control_list")
 
             // 更新密码
-            response.password?.let { pwd ->
+            response.data?.password?.let { pwd ->
                 val pwdStr = pwd.password ?: ""
                 db.userInfoDao().clear()
                 db.userInfoDao().insert(
@@ -129,7 +142,7 @@ object CloudSyncEngine {
             }
 
             // 更新 allow_input_pwd 开关
-            response.allow_input_pwd?.let { aip ->
+            response.data?.allow_input_pwd?.let { aip ->
                 db.switchDao().insert(
                     com.readboy.control.db.MirrorSwitchItem(
                         switch_name = "allow_input_pwd",
@@ -139,7 +152,7 @@ object CloudSyncEngine {
             }
 
             // 更新其他开关
-            response.switch_list?.forEach { sw ->
+            response.data?.switch_list?.forEach { sw ->
                 db.switchDao().insert(
                     com.readboy.control.db.MirrorSwitchItem(
                         switch_name = sw.switch_name ?: "unknown",
@@ -159,8 +172,16 @@ object CloudSyncEngine {
     /**
      * 上传管控列表到云端
      */
-    suspend fun pushToCloud(imei: String, uid: String = "00000000"): CloudPushResult = withContext(Dispatchers.IO) {
-        AppLogger.i(TAG, "===== 开始上传管控到云端 =====")
+    suspend fun pushToCloud(
+        imei: String? = null,
+        uid: String = "00000000"
+    ): CloudPushResult = withContext(Dispatchers.IO) {
+        val effectiveImei = imei ?: DeviceUtil.getEffectiveSerial()
+        if (effectiveImei.isNullOrEmpty()) {
+            AppLogger.e(TAG, "无法获取设备序列号，无法上传云端")
+            return@withContext CloudPushResult(false, "无法获取设备序列号")
+        }
+        AppLogger.i(TAG, "===== 开始上传管控到云端 (imei=$effectiveImei) =====")
         var lastError: String? = null
 
         for (attempt in 1..MAX_RETRY) {
@@ -195,7 +216,7 @@ object CloudSyncEngine {
                 // 设置 Header
                 conn.setRequestProperty("sn", SignUtil.getSign(uid, timestampMs))
                 conn.setRequestProperty("signature", SignUtil.getSign2(timestampMs))
-                conn.setRequestProperty("imei", imei)
+                conn.setRequestProperty("imei", effectiveImei)
                 conn.setRequestProperty("timestamp", seconds.toString())
                 conn.setRequestProperty("app_id", "parent-manage")
                 conn.setRequestProperty("control_list", uploadJson)
@@ -203,7 +224,7 @@ object CloudSyncEngine {
                 conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
 
                 // 发送标准参数为 body
-                val body = SignUtil.getCommonQueryString(imei, timestampMs)
+                val body = SignUtil.getCommonQueryString(effectiveImei, timestampMs)
                 conn.outputStream.use { os ->
                     os.write(body.toByteArray(Charsets.UTF_8))
                 }
@@ -248,10 +269,20 @@ object CloudSyncEngine {
         val status: Int = 0,
         val errno: Int = 0,
         val errmsg: String? = null,
-        val control_list: List<ControlListItem>? = null,
+        // 实测修正：所有配置字段在 data 对象内
+        val data: JpushData? = null
+    )
+
+    data class JpushData(
+        @SerializedName("app_control") val app_control: AppControl? = null,
         val password: PasswordItem? = null,
         @SerializedName("allow_input_pwd") val allow_input_pwd: AllowInputPwd? = null,
-        @SerializedName("switch_list") val switch_list: List<SwitchListItem>? = null
+        @SerializedName("switch_list") val switch_list: List<SwitchListItem>? = null,
+        @SerializedName("synchronize_data") val synchronize_data: Int? = null
+    )
+
+    data class AppControl(
+        @SerializedName("control_list") val control_list: List<ControlListItem>? = null
     )
 
     data class ControlListItem(

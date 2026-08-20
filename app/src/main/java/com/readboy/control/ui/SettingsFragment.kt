@@ -8,8 +8,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.textfield.TextInputEditText
+import com.readboy.control.AppLogger
 import com.readboy.control.R
 import com.readboy.control.network.VersionDetector
 import com.readboy.control.service.SyncWorker
@@ -88,6 +91,26 @@ class SettingsFragment : Fragment() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+
+        // 自定义远程设备序列号（输入框 + 保存按钮）
+        val etRemoteSerial = view.findViewById<TextInputEditText>(R.id.etRemoteSerial)
+        val btnSaveRemoteSerial = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveRemoteSerial)
+
+        // 加载已保存的远程序列号
+        val savedSerial = prefs.getString("remote_serial", "") ?: ""
+        etRemoteSerial.setText(savedSerial)
+
+        btnSaveRemoteSerial.setOnClickListener {
+            val serial = etRemoteSerial.text?.toString()?.trim() ?: ""
+            prefs.edit().putString("remote_serial", serial).apply()
+            if (serial.isNotEmpty()) {
+                Toast.makeText(requireContext(), "已设置远程序列号: $serial，仅发送请求不修改本机数据库", Toast.LENGTH_LONG).show()
+                AppLogger.i("Settings", "设置远程设备序列号: $serial（仅请求模式）")
+            } else {
+                Toast.makeText(requireContext(), "已清除远程序列号，使用本机设备", Toast.LENGTH_LONG).show()
+                AppLogger.i("Settings", "清除远程序列号，恢复本机模式")
+            }
+        }
 
         // 启动时确保计划同步
         if (autoSync) {
