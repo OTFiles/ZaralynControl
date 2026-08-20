@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZaralynControl Web - 读书郎家长管理云端管控工具</title>
+<style>
+:root {
+  --primary: #1565C0;
+  --primary-dark: #0D47A1;
+  --surface: #FFFFFF;
+  --bg: #F5F5F5;
+  --text: #212121;
+  --text-secondary: #757575;
+  --error: #D32F2F;
+  --success: #4CAF50;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+header {
+  background: var(--primary);
+  color: white;
+  padding: 20px;
+  text-align: center;
+}
+header h1 { font-size: 1.5em; margin-bottom: 4px; }
+header p { font-size: 0.9em; opacity: 0.9; }
+.container { max-width: 900px; margin: 20px auto; padding: 0 16px; }
+.card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card h2 { font-size: 1.1em; margin-bottom: 12px; color: var(--primary-dark); }
+label { display: block; font-weight: 600; margin: 12px 0 4px; font-size: 0.9em; }
+input, textarea, select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 0.95em;
+  font-family: inherit;
+  background: #fff;
+}
+input:focus, textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 8px 8px 8px 0;
+  transition: background 0.2s;
+}
+button:hover { background: var(--primary-dark); }
+button.secondary { background: #546E7A; }
+button.secondary:hover { background: #37474F; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.hint { font-size: 0.8em; color: var(--text-secondary); margin-top: 4px; }
+#result {
+  background: #263238;
+  color: #ECEFF1;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.8em;
+  padding: 14px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 400px;
+  overflow-y: auto;
+  min-height: 60px;
+}
+#status { font-size: 0.85em; margin-top: 8px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 600; color: white; }
+.badge.ok { background: var(--success); }
+.badge.fail { background: var(--error); }
+.code-block {
+  background: #263238; color: #ECEFF1; padding: 12px; border-radius: 8px;
+  font-family: monospace; font-size: 0.75em; overflow-x: auto; margin-top: 8px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f0f4f8; }
+.collapsible { cursor: pointer; user-select: none; }
+details { margin-top: 8px; }
+summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔐 ZaralynControl Web</h1>
+  <p>读书郎家长管理 · 云端管控接口操作工具（基于 6.2.8 逆向 + 实测）</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>① 设备参数</h2>
+    <label>设备序列号 (imei)</label>
+    <input id="imei" placeholder="例如 95eab027" value="">
+    <div class="hint">从家长管理 App 的 Util.getSerial() 获取，通常在设置→关于→序列号</div>
+
+    <label>用户 ID (uid，可选，默认 00000000)</label>
+    <input id="uid" placeholder="00000000" value="00000000">
+    <div class="hint">一般设备用默认 00000000 即可</div>
+
+    <button id="btnGenCurl">生成 curl 命令</button>
+    <button id="btnPullCloud" class="secondary">拉取云端配置</button>
+  </div>
+
+  <div class="card">
+    <h2>② 管控列表 JSON（上传用）</h2>
+    <label>control_list（每项含 packageName/status/operation，status: 1=放行 0=禁用）</label>
+    <textarea id="controlList" rows="8" spellcheck="false">[]</textarea>
+    <div class="hint">示例：
+[
+  {"packageName": "com.tencent.mm", "status": 1, "operation": "update"},
+  {"packageName": "com.baidu.homework", "status": 0, "operation": "update"}
+]</div>
+    <button id="btnPushCloud">上传管控到云端</button>
+  </div>
+
+  <div class="card">
+    <h2>③ 操作结果</h2>
+    <div id="status"><span class="badge" id="statusBadge">待操作</span></div>
+    <label>响应（自动复制 curl 到剪贴板）</label>
+    <pre id="result">等待操作...</pre>
+  </div>
+
+  <div class="card">
+    <h2>④ 接口速查（自动生成 curl，无需浏览器 CORS）</h2>
+    <details>
+      <summary>展开 / 收合</summary>
+      <div id="curlOutput"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>安全与用途说明</h2>
+    <p class="hint">
+      ⚠️ 本工具仅在你有设备所有权时使用。签名密钥硬编码于家长管理 APK 中，公开已知。<br><br>
+      <strong>接口列表</strong>：<br>
+      · 拉取: <code>GET http://parent-manage.readboy.com/api/v1/jpush/content?get_all=1</code><br>
+      · 上传: <code>POST https://parentadmin.readboy.com/v1/appinfo/controlApp/upload</code>（Header 携带 control_list）<br>
+      · 解绑: <code>GET https://parentadmin.readboy.com/v1/machine/cancel_bindings</code>（见 ZaralynUnbind）<br><br>
+      <strong>签名算法</strong>：getSign2 = MD5(秒 + APPSECRET + MD5("parent-manage"))<br>
+      getSign = uid + 秒 + MD5(秒 + APP_KEY + MD5("parentsadmin")) + "parentsadmin"<br><br>
+      <strong>注意</strong>：浏览器直接 fetch 会遇到 CORS 限制，推荐复制 curl 命令在终端执行，或在服务器/VPS 上使用。
+    </p>
+  </div>
+
+</div>
+
+<script>
+// ============ 签名常量（反编译自 Sign.smali） ============
+const APPSECRET = "de917e0e6b4962061d66d24f6cfdb5bf0d1b9b39";
+const APP_ID2   = "parent-manage";
+const APP_KEY   = "9b332c2653ce7189da101dac5a63fd4e";
+const APP_ID    = "parentsadmin";
+
+// ============ MD5 实现（纯 JS） ============
+const MD5 = (function() {
+  function safeAdd(x, y) { const lsw = (x & 0xFFFF) + (y & 0xFFFF); return (((x >> 16) + (y >> 16) + (lsw >> 16)) << 16) | (lsw & 0xFFFF); }
+  function bitRotateLeft(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
+  function md5cmn(q, a, b, x, s, t) { return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b); }
+  function md5ff(a, b, c, d, x, s, t) { return md5cmn((b & c) | (~b & d), a, b, x, s, t); }
+  function md5gg(a, b, c, d, x, s, t) { return md5cmn((b & d) | (c & ~d), a, b, x, s, t); }
+  function md5hh(a, b, c, d, x, s, t) { return md5cmn(b ^ c ^ d, a, b, x, s, t); }
+  function md5ii(a, b, c, d, x, s, t) { return md5cmn(c ^ (b | ~d), a, b, x, s, t); }
+  function binlMD5(x, len) {
+    x[len >> 5] |= 0x80 << (len % 32);
+    x[(((len + 64) >>> 9) << 4) + 14] = len;
+    let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+    for (let i = 0; i < x.length; i += 16) {
+      const olda = a, oldb = b, oldc = c, oldd = d;
+      a = md5ff(a, b, c, d, x[i], 7, -680876936); d = md5ff(d, a, b, c, x[i+1], 12, -389564586); c = md5ff(c, d, a, b, x[i+2], 17, 606105819); b = md5ff(b, c, d, a, x[i+3], 22, -1044525330);
+      a = md5ff(a, b, c, d, x[i+4], 7, -176418897); d = md5ff(d, a, b, c, x[i+5], 12, 1200080426); c = md5ff(c, d, a, b, x[i+6], 17, -1473231341); b = md5ff(b, c, d, a, x[i+7], 22, -45705983);
+      a = md5ff(a, b, c, d, x[i+8], 7, 1770035416); d = md5ff(d, a, b, c, x[i+9], 12, -1958414417); c = md5ff(c, d, a, b, x[i+10], 17, -42063); b = md5ff(b, c, d, a, x[i+11], 22, -1990404162);
+      a = md5ff(a, b, c, d, x[i+12], 7, 1804603682); d = md5ff(d, a, b, c, x[i+13], 12, -40341101); c = md5ff(c, d, a, b, x[i+14], 17, -1502002290); b = md5ff(b, c, d, a, x[i+15], 22, 1236535329);
+      a = md5gg(a, b, c, d, x[i+1], 5, -165796510); d = md5gg(d, a, b, c, x[i+6], 9, -1069501632); c = md5gg(c, d, a, b, x[i+11], 14, 643717713); b = md5gg(b, c, d, a, x[i], 20, -373897302);
+      a = md5gg(a, b, c, d, x[i+5], 5, -701558691); d = md5gg(d, a, b, c, x[i+10], 9, 38016083); c = md5gg(c, d, a, b, x[i+15], 14, -660478335); b = md5gg(b, c, d, a, x[i+4], 20, -405537848);
+      a = md5gg(a, b, c, d, x[i+9], 5, 568446438); d = md5gg(d, a, b, c, x[i+14], 9, -1019803690); c = md5gg(c, d, a, b, x[i+3], 14, -187363961); b = md5gg(b, c, d, a, x[i+8], 20, 1163531501);
+      a = md5gg(a, b, c, d, x[i+13], 5, -1444681467); d = md5gg(d, a, b, c, x[i+2], 9, -51403784); c = md5gg(c, d, a, b, x[i+7], 14, 1735328473); b = md5gg(b, c, d, a, x[i+12], 20, -1926607734);
+      a = md5hh(a, b, c, d, x[i+5], 4, -378558); d = md5hh(d, a, b, c, x[i+8], 11, -2022574463); c = md5hh(c, d, a, b, x[i+11], 16, 1839030562); b = md5hh(b, c, d, a, x[i+14], 23, -35309556);
+      a = md5hh(a, b, c, d, x[i+1], 4, -1530992060); d = md5hh(d, a, b, c, x[i+4], 11, 1272893353); c = md5hh(c, d, a, b, x[i+7], 16, -155497632); b = md5hh(b, c, d, a, x[i+10], 23, -1094730640);
+      a = md5hh(a, b, c, d, x[i+13], 4, 681279174); d = md5hh(d, a, b, c, x[i], 11, -358537222); c = md5hh(c, d, a, b, x[i+3], 16, -722521979); b = md5hh(b, c, d, a, x[i+6], 23, 76029189);
+      a = md5hh(a, b, c, d, x[i+9], 4, -640364487); d = md5hh(d, a, b, c, x[i+12], 11, -421815835); c = md5hh(c, d, a, b, x[i+15], 16, 530742520); b = md5hh(b, c, d, a, x[i+2], 23, -995338651);
+      a = md5ii(a, b, c, d, x[i], 6, -198630844); d = md5ii(d, a, b, c, x[i+7], 10, 1126891415); c = md5ii(c, d, a, b, x[i+14], 15, -1416354905); b = md5ii(b, c, d, a, x[i+5], 21, -57434055);
+      a = md5ii(a, b, c, d, x[i+12], 6, 1700485571); d = md5ii(d, a, b, c, x[i+3], 10, -1894986606); c = md5ii(c, d, a, b, x[i+10], 15, -1051523); b = md5ii(b, c, d, a, x[i+1], 21, -2054922799);
+      a = md5ii(a, b, c, d, x[i+8], 6, 1873313359); d = md5ii(d, a, b, c, x[i+15], 10, -30611744); c = md5ii(c, d, a, b, x[i+6], 15, -1560198380); b = md5ii(b, c, d, a, x[i+13], 21, 1309151649);
+      a = md5ii(a, b, c, d, x[i+4], 6, -145523070); d = md5ii(d, a, b, c, x[i+11], 10, -1120210379); c = md5ii(c, d, a, b, x[i+2], 15, 718787259); b = md5ii(b, c, d, a, x[i+9], 21, -343485551);
+      a = safeAdd(a, olda); b = safeAdd(b, oldb); c = safeAdd(c, oldc); d = safeAdd(d, oldd);
+    }
+    return [a, b, c, d];
+  }
+  function binl2hex(binarray) {
+    const hexTab = "0123456789abcdef";
+    let str = "";
+    for (let i = 0; i < binarray.length * 4; i++) {
+      str += hexTab.charAt((binarray[i>>2] >> ((i%4)*8+4)) & 0xF) + hexTab.charAt((binarray[i>>2] >> ((i%4)*8)) & 0xF);
+    }
+    return str;
+  }
+  function str2binl(str) {
+    const bin = []; const mask = (1 << 8) - 1;
+    for (let i = 0; i < str.length * 8; i += 8) {
+      bin[i>>5] |= (str.charCodeAt(i/8) & mask) << (i%32);
+    }
+    return bin;
+  }
+  function utf8Bytes(s) {
+    const arr = unescape(encodeURIComponent(s));
+    const bytes = [];
+    for (let i = 0; i < arr.length; i++) bytes.push(arr.charCodeAt(i));
+    return bytes;
+  }
+  function bytes2binl(bytes) {
+    const bin = [];
+    for (let i = 0; i < bytes.length * 8; i += 8) bin[i>>5] |= (bytes[i/8] & 0xFF) << (i % 32);
+    return bin;
+  }
+  return function(s) {
+    const bytes = utf8Bytes(s);
+    return binl2hex(binlMD5(bytes2binl(bytes), bytes.length * 8));
+  };
+})();
+
+// ============ 签名计算 ============
+function getSign2(timestampMs) {
+  const seconds = Math.floor(timestampMs / 1000);
+  return MD5(seconds + APPSECRET + MD5(APP_ID2));
+}
+function getSign(uid, timestampMs) {
+  const seconds = Math.floor(timestampMs / 1000);
+  return uid + seconds + MD5(seconds + APP_KEY + MD5(APP_ID)) + APP_ID;
+}
+function commonParams(imei) {
+  const ts = Date.now();
+  return {
+    signature: getSign2(ts),
+    imei: imei,
+    timestamp: String(ts),
+    app_id: APP_ID2
+  };
+}
+
+// ============ curl 命令生成 ============
+function escapeShell(s) {
+  return "'" + String(s).replace(/'/g, `'"'"'`) + "'";
+}
+function genCurlPull(imei) {
+  const p = commonParams(imei);
+  const q = `signature=${p.signature}&imei=${encodeURIComponent(p.imei)}&timestamp=${p.timestamp}&app_id=${p.app_id}&get_all=1`;
+  return `# 拉取云端配置 (get_all=1)\ncurl -s "http://parent-manage.readboy.com/api/v1/jpush/content?${q}"`;
+}
+function genCurlPush(imei, uid, controlList) {
+  const ts = Date.now();
+  const seconds = Math.floor(ts / 1000);
+  const sig2 = getSign2(ts);
+  const sn = getSign(uid, ts);
+  const body = `signature=${sig2}&imei=${encodeURIComponent(imei)}&timestamp=${seconds}&app_id=${APP_ID2}`;
+  return [
+    `# 上传管控列表 (controlApp/upload)`,
+    `curl -s -X POST "https://parentadmin.readboy.com/v1/appinfo/controlApp/upload" \\`,
+    `  -H "signature: ${sig2}" \\`,
+    `  -H "sn: ${sn}" \\`,
+    `  -H "imei: ${imei}" \\`,
+    `  -H "timestamp: ${seconds}" \\`,
+    `  -H "app_id: ${APP_ID2}" \\`,
+    `  -H "initialize: 1" \\`,
+    `  -H "control_list: ${escapeShell(JSON.stringify(controlList))}" \\`,
+    `  -H "Content-Type: application/x-www-form-urlencoded" \\`,
+    `  -d "${body}"`
+  ].join("\n");
+}
+function genCurlUnbind(imei, uid) {
+  const ts = Date.now();
+  const seconds = Math.floor(ts / 1000);
+  const sn = getSign(uid, ts);
+  const q = `signature=${sn}&sn=${sn}&imei=${encodeURIComponent(imei)}&timestamp=${seconds}&app_id=${APP_ID2}`;
+  return `# 解绑设备 (GET, 实测由 getSign 长签名 + signature/sn 双参数生效)\ncurl -s "https://parentadmin.readboy.com/v1/machine/cancel_bindings?${q}"`;
+}
+function genCurlActiveStatus(imei) {
+  const p = commonParams(imei);
+  const q = `signature=${p.signature}&imei=${encodeURIComponent(p.imei)}&timestamp=${p.timestamp}&app_id=${p.app_id}`;
+  return `# 查询激活状态\ncurl -s "http://parent-manage.readboy.com/api/v1/machine/get_active_status?${q}"`;
+}
+function genCurlHeartbeat(imei) {
+  const p = commonParams(imei);
+  const q = `signature=${p.signature}&imei=${encodeURIComponent(p.imei)}&timestamp=${p.timestamp}&app_id=${p.app_id}&screen_off=0`;
+  return `# 心跳\ncurl -s "http://parent-manage.readboy.com/api/v1/heart_beat?${q}"`;
+}
+
+// ============ UI 逻辑 ============
+const $ = id => document.getElementById(id);
+
+function setStatus(text, ok) {
+  const badge = $('statusBadge');
+  badge.textContent = text;
+  badge.className = 'badge ' + (ok ? 'ok' : 'fail');
+}
+
+function showResult(text) {
+  $('result').textContent = text;
+}
+
+// 生成 curl
+$('btnGenCurl').onclick = function() {
+  const imei = $('imei').value.trim();
+  const uid = $('uid').value.trim() || '00000000';
+  if (!imei) { setStatus('请填写设备序列号', false); return; }
+  const output = [
+    genCurlPull(imei),
+    '',
+    genCurlPush(imei, uid, JSON.parse($('controlList').value || '[]')),
+    '',
+    genCurlUnbind(imei, uid),
+    '',
+    genCurlActiveStatus(imei),
+    '',
+    genCurlHeartbeat(imei)
+  ].join('\n\n');
+  $('curlOutput').textContent = output;
+  showResult(output);
+  // 复制到剪贴板
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(output).then(() => setStatus('curl 命令已复制到剪贴板', true));
+  } else {
+    setStatus('curl 命令已生成', true);
+  }
+};
+
+// 拉取云端
+$('btnPullCloud').onclick = async function() {
+  const imei = $('imei').value.trim();
+  if (!imei) { setStatus('请填写设备序列号', false); return; }
+  setStatus('请求中...', false);
+  showResult('正在请求 http://parent-manage.readboy.com/api/v1/jpush/content ...');
+  try {
+    const p = commonParams(imei);
+    const q = `signature=${p.signature}&imei=${encodeURIComponent(p.imei)}&timestamp=${p.timestamp}&app_id=${p.app_id}&get_all=1`;
+    const resp = await fetch(`http://parent-manage.readboy.com/api/v1/jpush/content?${q}`);
+    const text = await resp.text();
+    showResult(`HTTP ${resp.status}\n${text}`);
+    setStatus(resp.ok ? '成功' : 'HTTP ' + resp.status, resp.ok);
+  } catch (e) {
+    showResult('请求失败（可能是 CORS 限制）：\n' + e.message + '\n\n请使用「生成 curl」在终端执行。');
+    setStatus('CORS 失败，请用 curl', false);
+  }
+};
+
+// 上传管控
+$('btnPushCloud').onclick = async function() {
+  const imei = $('imei').value.trim();
+  const uid = $('uid').value.trim() || '00000000';
+  if (!imei) { setStatus('请填写设备序列号', false); return; }
+  let controlList;
+  try {
+    controlList = JSON.parse($('controlList').value || '[]');
+  } catch (e) {
+    setStatus('control_list JSON 格式错误', false);
+    return;
+  }
+  setStatus('请求中...', false);
+  showResult('正在请求 https://parentadmin.readboy.com/v1/appinfo/controlApp/upload ...');
+  try {
+    const ts = Date.now();
+    const seconds = Math.floor(ts / 1000);
+    const sig2 = getSign2(ts);
+    const sn = getSign(uid, ts);
+    const body = `signature=${sig2}&imei=${encodeURIComponent(imei)}&timestamp=${seconds}&app_id=${APP_ID2}`;
+    const resp = await fetch('https://parentadmin.readboy.com/v1/appinfo/controlApp/upload', {
+      method: 'POST',
+      headers: {
+        'signature': sig2,
+        'sn': sn,
+        'imei': imei,
+        'timestamp': String(seconds),
+        'app_id': APP_ID2,
+        'initialize': '1',
+        'control_list': JSON.stringify(controlList),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body
+    });
+    const text = await resp.text();
+    showResult(`HTTP ${resp.status}\n${text}`);
+    setStatus(resp.ok ? '成功' : 'HTTP ' + resp.status, resp.ok);
+  } catch (e) {
+    showResult('请求失败（可能是 CORS 限制）：\n' + e.message + '\n\n请使用「生成 curl」在终端执行。');
+    setStatus('CORS 失败，请用 curl', false);
+  }
+};
+
+// 初始占位
+$('curlOutput').textContent = '点击「生成 curl 命令」生成所有接口的命令行。';
+</script>
+</body>
+</html>
