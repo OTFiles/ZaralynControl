@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ZaralynControl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=swap" rel="stylesheet">
 <style>
 /* ============ MD3 Design Tokens ============ */
 :root {
@@ -52,6 +54,28 @@ body {
   flex-direction:column;
 }
 ::selection { background: var(--md-primary-container); }
+
+/* ============ MD3 Icons ============ */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 22px;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+  vertical-align: middle;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  user-select: none;
+}
+.btn .material-symbols-outlined { font-size: 20px; margin-right: 6px; }
+.card-title .material-symbols-outlined { font-size: 22px; color: var(--md-primary); }
+.appbar .logo .material-symbols-outlined { font-size: 24px; }
 
 /* ============ App Bar ============ */
 .appbar {
@@ -295,7 +319,7 @@ details.config pre {
 <!-- App Bar -->
 <header class="appbar">
   <div class="brand">
-    <div class="logo">Z</div>
+    <div class="logo"><span class="material-symbols-outlined">settings</span></div>
     <div>
       <h1>ZaralynControl</h1>
       <div class="subtitle">读书郎家长管理 · 云端管控配置工具</div>
@@ -310,7 +334,7 @@ details.config pre {
 <main>
   <!-- 设备参数 -->
   <section class="card fade">
-    <div class="card-title">📟 设备参数</div>
+    <div class="card-title"><span class="material-symbols-outlined">devices_other</span> 设备参数</div>
     <div class="field">
       <input type="text" id="imei" placeholder=" " value="" autocomplete="off">
       <label for="imei">设备序列号 (imei)</label>
@@ -322,7 +346,7 @@ details.config pre {
       <span class="hint">一般设备保持 00000000 即可。</span>
     </div>
     <div class="btn-row">
-      <button class="btn filled" id="btnPull">⬇ 拉取配置</button>
+      <button class="btn filled" id="btnPull"><span class="material-symbols-outlined">download</span> 拉取配置</button>
       <button class="btn outlined" id="btnHeartbeat">心跳检测</button>
       <button class="btn outlined" id="btnActiveStatus">激活状态</button>
     </div>
@@ -331,7 +355,7 @@ details.config pre {
 
   <!-- 管控列表 -->
   <section class="card fade hidden" id="configCard">
-    <div class="card-title">📱 应用管控 <span class="count-badge" id="cfgCount"></span></div>
+    <div class="card-title"><span class="material-symbols-outlined">phone_android</span> 应用管控 <span class="count-badge" id="cfgCount"></span></div>
 
     <div class="stat-row">
       <div class="stat"><div class="num blue" id="statTotal">0</div><div class="lbl">共管控</div></div>
@@ -340,7 +364,7 @@ details.config pre {
     </div>
 
     <div class="search-wrap">
-      <span class="icon">🔍</span>
+      <span class="icon material-symbols-outlined" style="font-size:20px">search</span>
       <input type="text" id="search" placeholder="搜索应用 (包名 / 名称)">
     </div>
 
@@ -355,13 +379,13 @@ details.config pre {
     </div>
 
     <div class="btn-row" style="margin-top:14px;">
-      <button class="btn outlined" id="btnAddApp">＋ 添加应用</button>
+      <button class="btn outlined" id="btnAddApp"><span class="material-symbols-outlined">add_circle</span> 添加应用</button>
     </div>
   </section>
 
   <!-- 密码 -->
   <section class="card fade hidden" id="pwdCard">
-    <div class="card-title">🔑 家长密码</div>
+    <div class="card-title"><span class="material-symbols-outlined">lock</span> 家长密码</div>
     <div class="pwd-row">
       <span class="pwd-display" id="pwdDisplay">— — — —</span>
       <button class="btn outlined small" id="btnEditPwd">修改密码</button>
@@ -371,13 +395,13 @@ details.config pre {
 
   <!-- 控制开关 -->
   <section class="card fade hidden" id="switchCard">
-    <div class="card-title">🎛 控制开关</div>
+    <div class="card-title"><span class="material-symbols-outlined">tune</span> 控制开关</div>
     <div id="switchList"></div>
   </section>
 
   <!-- 原始终端区 -->
   <section class="card">
-    <div class="card-title">🛠 调试</div>
+    <div class="card-title"><span class="material-symbols-outlined">build</span> 调试</div>
     <details class="config">
       <summary>查看 / 复制 curl 命令</summary>
       <pre id="curlOut">点击上方「生成 curl」按钮后显示。</pre>
@@ -386,7 +410,7 @@ details.config pre {
       <summary>原始 JSON 响应</summary>
       <pre id="rawOut">暂无响应。</pre>
     </details>
-    <div class="card-title" style="margin-top:12px;">📋 操作日志</div>
+    <div class="card-title" style="margin-top:12px;"><span class="material-symbols-outlined">article</span> 操作日志</div>
     <div class="logbox" id="log"></div>
   </section>
 </main>
@@ -394,7 +418,7 @@ details.config pre {
 <!-- 底部操作栏：保存上传 -->
 <div class="bottom-bar hidden" id="bottomBar">
   <button class="btn outlined" id="btnDiscard">放弃修改</button>
-  <button class="btn filled btn-block-xs" id="btnSave">💾 保存并上传配置</button>
+  <button class="btn filled btn-block-xs" id="btnSave"><span class="material-symbols-outlined">cloud_upload</span> 保存并上传配置</button>
 </div>
 
 <!-- Toast -->
@@ -555,7 +579,7 @@ async function pullConfig(){
   if(!imei){ toast("请填写设备序列号"); return; }
   state.imei = imei;
   setBusy(true);
-  appendLog(`⬇ 拉取配置 imei=${imei} ...`);
+  appendLog(`<span class="material-symbols-outlined">download</span> 拉取配置 imei=${imei} ...`);
   try{
     const p = commonParams(imei);
     const r = await apiGet("http://parent-manage.readboy.com/api/v1/jpush/content",
@@ -586,7 +610,7 @@ async function pullConfig(){
       state.switches.push({name:sw.switch_name||"switch_"+sw.switch_id, label:sw.switch_name||("开关"+sw.switch_id), status:sw.switch_state, known:false});
     });
     state.modified = false;
-    appendLog(`✓ 拉取成功：${state.controlList.length} 个应用，密码${state.password?"已设置":"未设置"}`);
+    appendLog(`· 拉取成功：${state.controlList.length} 个应用，密码${state.password?"已设置":"未设置"}`);
     renderAll();
     toast("配置已拉取");
     showDeviceInfo("已连接设备 " + imei, true);
@@ -604,7 +628,7 @@ async function savePush(){
   if(!state.controlList.length){ toast("管控列表为空，无可上传"); return; }
   const imei = state.imei, uid = $("uid").value.trim() || "00000000";
   setBusy(true);
-  appendLog(`⬆ 上传管控 ${state.controlList.length} 项 → controlApp/upload ...`);
+  appendLog(`↑ 上传管控 ${state.controlList.length} 项 → controlApp/upload ...`);
   try{
     const ts = Date.now(), sec = Math.floor(ts/1000);
     const sig2 = getSign2(ts), sn = getSign(uid, ts);
@@ -625,7 +649,7 @@ async function savePush(){
     if(r.code===200 && r.text.includes('"status":1')){
       state.controlList.forEach(it=>{ it.isNew=false; });
       state.modified = false;
-      appendLog("✓ 上传成功：云端已更新"); toast("配置已上传云端");
+      appendLog("· 上传成功：云端已更新"); toast("配置已上传云端");
       renderAll();
     }else{
       appendLog(`上传未确认：HTTP ${r.code} ${r.text}`,"err");
@@ -642,7 +666,7 @@ async function savePush(){
 async function savePassword(pwd){
   const imei = state.imei; if(!imei){ toast("请先拉取配置"); return; }
   setBusy(true);
-  appendLog(`⬆ 修改密码 → password/upload ...`);
+  appendLog(`↑ 修改密码 → password/upload ...`);
   try{
     const p = commonParams(imei);
     const body = `signature=${p.signature}&imei=${encodeURIComponent(imei)}&timestamp=${p.timestamp}&app_id=${p.app_id}&password=${encodeURIComponent(pwd||"")}&is_long_pwd=${pwd&&pwd.length>6?1:0}`;
@@ -650,7 +674,7 @@ async function savePassword(pwd){
       {"Content-Type":"application/x-www-form-urlencoded"}, body);
     if(r.code===200){
       state.password = pwd || "";
-      appendLog(`✓ 密码${pwd?"已修改":"已清除"}`);
+      appendLog(`· 密码${pwd?"已修改":"已清除"}`);
       toast(pwd?"密码已修改":"密码已清除");
       renderAll();
     }else{ appendLog(`修改密码失败 HTTP ${r.code}`,"err"); toast("修改失败"); }
@@ -668,8 +692,8 @@ async function heartbeat(){
     const p = commonParams(imei);
     const r = await apiGet("http://parent-manage.readboy.com/api/v1/heart_beat", {...p, screen_off:"0"});
     const ok = r.code===200 && r.text.includes('"status":1');
-    appendLog(`${ok?"✓":"✗"} 心跳：HTTP ${r.code} ${r.text}`);
-    toast(ok ? "设备在线 ✓" : "心跳异常");
+    appendLog(`${ok?"[在线]":"[离线]"} 心跳：HTTP ${r.code} ${r.text}`);
+    toast(ok ? "设备在线" : "心跳异常");
   }catch(e){ appendLog(`心跳异常：${e.message}`,"err"); toast("心跳请求失败"); }
   finally{ setBusy(false); }
 }
@@ -728,7 +752,7 @@ function renderList(){
   });
   const area = $("appArea");
   if(!items.length){
-    area.innerHTML = `<div class="empty"><div class="art">${state.controlList.length ? "🔎" : "📭"}</div><p>${state.controlList.length ? "没有匹配的应用" : "暂无配置，请先「拉取配置」"}</p>${state.controlList.length?"":"<button class='btn filled' onclick='pullConfig()'>⬇ 拉取配置</button>"}</div>`;
+    area.innerHTML = `<div class="empty"><div class="art material-symbols-outlined" style="font-size:44px">${state.controlList.length ? "search" : "inbox"}</div><p>${state.controlList.length ? "没有匹配的应用" : "暂无配置，请先「拉取配置」"}</p>${state.controlList.length?"":"<button class='btn filled' onclick='pullConfig()'><span class=\'material-symbols-outlined\'>download</span> 拉取配置</button>"}</div>`;
     return;
   }
   area.innerHTML = "";
@@ -741,7 +765,7 @@ function renderList(){
         <div class="app-name">${escHtml(it.app_name || it.pack_name)} ${it.isNew?'<span class="app-tag new">新增</span>':''}</div>
         <div class="app-pkg">${escHtml(it.pack_name)}</div>
       </div>
-      <button class="app-del" title="移除" onclick="removeApp('${escAttr(it.pack_name)}')">✕</button>
+      <button class="app-del" title="移除" onclick="removeApp('${escAttr(it.pack_name)}')"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
       <label class="m3switch">
         <input type="checkbox" ${it.status===1?"checked":""} onchange="toggleApp('${escAttr(it.pack_name)}', this.checked)">
         <span class="track"><span class="thumb"></span></span>
@@ -761,7 +785,7 @@ function removeApp(pkg){
   markModified(true);
   toast(`已移除 ${pkg}（保存后生效）`);
   renderAll();
-  appendLog(`✕ 从列表移除 ${pkg}`);
+  appendLog(`× 从列表移除 ${pkg}`);
 }
 function addApp(pkg){
   if(!pkg){ toast("请输入包名"); return; }
@@ -770,7 +794,7 @@ function addApp(pkg){
   markModified(true);
   renderAll();
   toast(`已添加 ${pkg}（保存后生效）`);
-  appendLog(`＋ 添加 ${pkg}`);
+  appendLog(`+ 添加 ${pkg}`);
 }
 
 function renderSwitches(){
@@ -803,9 +827,9 @@ function markModified(m){
 }
 
 function showDeviceInfo(msg, ok){
-  const icon = ok ? "✅" : "⚠️";
+  const iconStr = ok ? "check_circle" : "warning";
   const color = ok ? "" : "color:var(--md-error)";
-  $("deviceStatus").innerHTML = `<span style="${color}">${icon} ${escHtml(msg)}</span>`;
+  $("deviceStatus").innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;${color}">${iconStr}</span> ${escHtml(msg)}`;
 }
 
 /* ================================================================
@@ -845,7 +869,7 @@ function genCurl(){
   $("curlOut").textContent = out;
   if(navigator.clipboard){ navigator.clipboard.writeText(out).then(()=>toast("curl 已复制")); }
   else toast("curl 已生成");
-  appendLog("🔧 已生成 curl 命令");
+  appendLog("已生成 curl 命令");
 }
 
 /* ================================================================
