@@ -3,6 +3,8 @@ package com.readboy.control.ui
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -34,6 +36,12 @@ class ControlListFragment : Fragment() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var adapter: ControlListAdapter? = null
     private var items = mutableListOf<MirrorControlItem>()
+    private var filteredItems = mutableListOf<MirrorControlItem>()
+    private var searchQuery = ""
+    private var statsCardView: com.google.android.material.card.MaterialCardView? = null
+    private var tvStatTotalView: TextView? = null
+    private var tvStatAllowedView: TextView? = null
+    private var tvStatDisabledView: TextView? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -48,9 +56,18 @@ class ControlListFragment : Fragment() {
 
         val listView = view.findViewById<ListView>(R.id.listApps)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
+        val statsCard = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.statsCard)
+        val tvStatTotal = view.findViewById<TextView>(R.id.tvStatTotal)
+        val tvStatAllowed = view.findViewById<TextView>(R.id.tvStatAllowed)
+        val tvStatDisabled = view.findViewById<TextView>(R.id.tvStatDisabled)
+        val etSearch = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.etSearch)
+        statsCardView = statsCard
+        tvStatTotalView = tvStatTotal
+        tvStatAllowedView = tvStatAllowed
+        tvStatDisabledView = tvStatDisabled
         listView.emptyView = emptyView
 
-        adapter = ControlListAdapter(requireContext(), items)
+        adapter = ControlListAdapter(requireContext(), filteredItems)
         listView.adapter = adapter
 
         // 拉取/推送按钮
@@ -66,17 +83,62 @@ class ControlListFragment : Fragment() {
             showAddAppDialog()
         }
 
+        // 搜索过滤
+        etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                searchQuery = s?.toString()?.trim()?.lowercase() ?: ""
+                filterAndUpdate(statsCard, tvStatTotal, tvStatAllowed, tvStatDisabled)
+            }
+        })
+
         // 加载镜像库数据
-        loadMirror()
+        loadMirror(statsCard, tvStatTotal, tvStatAllowed, tvStatDisabled)
     }
 
-    private fun loadMirror() {
+    private fun filterAndUpdate(
+        statsCard: com.google.android.material.card.MaterialCardView?,
+        tvStatTotal: TextView?,
+        tvStatAllowed: TextView?,
+        tvStatDisabled: TextView?
+    ) {
+        filteredItems.clear()
+        filteredItems.addAll(
+            if (searchQuery.isEmpty()) items
+            else items.filter {
+                it.package_name.lowercase().contains(searchQuery) ||
+                (it.app_name?.lowercase()?.contains(searchQuery) ?: false)
+            }
+        )
+        adapter?.notifyDataSetChanged()
+
+        // 更新统计
+        if (items.isNotEmpty()) {
+            statsCard?.visibility = View.VISIBLE
+            val total = items.size
+            val allowed = items.count { it.disabled_state == 0 }
+            val disabled = total - allowed
+            tvStatTotal?.text = "共 $total 项"
+            tvStatAllowed?.text = "允许 $allowed"
+            tvStatDisabled?.text = "禁用 $disabled"
+        } else {
+            statsCard?.visibility = View.GONE
+        }
+    }
+
+    private fun loadMirror(
+        statsCard: com.google.android.material.card.MaterialCardView? = null,
+        tvStatTotal: TextView? = null,
+        tvStatAllowed: TextView? = null,
+        tvStatDisabled: TextView? = null
+    ) {
         scope.launch {
             val db = MirrorDatabase.getInstance(requireContext())
             val list = db.controlListDao().getAll()
             items.clear()
             items.addAll(list)
-            adapter?.notifyDataSetChanged()
+            filterAndUpdate(statsCard, tvStatTotal, tvStatAllowed, tvStatDisabled)
             AppLogger.d("ControlListFragment", "镜像库加载 ${items.size} 项")
         }
     }
@@ -88,7 +150,12 @@ class ControlListFragment : Fragment() {
             val result = SyncEngine.pullFromProvider(requireContext())
             AppLogger.i("ControlListFragment", "拉取结果: ${result.message}")
             Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
-            loadMirror()
+            // 刷新镜像库（含统计）
+            val db = MirrorDatabase.getInstance(requireContext())
+            val list = db.controlListDao().getAll()
+            items.clear()
+            items.addAll(list)
+            filterAndUpdate(statsCardView, tvStatTotalView, tvStatAllowedView, tvStatDisabledView)
             // 同步后更新后台计划
             SyncWorker.schedule(requireContext())
         }
@@ -144,7 +211,7 @@ class ControlListFragment : Fragment() {
             )
             AppLogger.i("ControlListFragment", "添加应用到镜像库: $pkg")
             Toast.makeText(requireContext(), "已添加 $pkg", Toast.LENGTH_SHORT).show()
-            loadMirror()
+            loadMirror(statsCardView, tvStatTotalView, tvStatAllowedView, tvStatDisabledView)
         }
     }
 
