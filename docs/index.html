@@ -471,7 +471,7 @@ const APP_ID    = "parentsadmin";
 const MD5 = (function(){
   function s(x,y){const l=(x&0xFFFF)+(y&0xFFFF);return(((x>>16)+(y>>16)+(l>>16))<<16)|(l&0xFFFF)}
   function rl(n,c){return(n<<c)|(n>>>(32-c))}
-  function cmn(q,a,b,x,s,t){return s(rl(s(s(a,q),s(x,t)),s),b)}
+  function cmn(q,a,b,x,sh,t){return s(rl(s(s(a,q),s(x,t)),sh),b)}
   function ff(a,b,c,d,x,s,t){return cmn((b&c)|(~b&d),a,b,x,s,t)}
   function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&~d),a,b,x,s,t)}
   function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t)}
@@ -579,7 +579,7 @@ async function pullConfig(){
   if(!imei){ toast("请填写设备序列号"); return; }
   state.imei = imei;
   setBusy(true);
-  appendLog(`<span class="material-symbols-outlined">download</span> 拉取配置 imei=${imei} ...`);
+  appendLog(`拉取配置 imei=${imei} ...`);
   try{
     const p = commonParams(imei);
     const r = await apiGet("http://parent-manage.readboy.com/api/v1/jpush/content",
