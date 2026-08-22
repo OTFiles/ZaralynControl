@@ -69,7 +69,7 @@ object CloudSyncEngine {
                 }
                 conn.disconnect()
 
-                AppLogger.d(TAG, "拉取响应: HTTP $responseCode, body=${responseBody.take(200)}")
+                AppLogger.d(TAG, "拉取响应: HTTP $responseCode, body=$responseBody")
 
                 if (responseCode in 200..299) {
                     return@withContext CloudPullResult(true, responseBody)
@@ -237,7 +237,7 @@ object CloudSyncEngine {
                 }
                 conn.disconnect()
 
-                AppLogger.d(TAG, "上传响应: HTTP $responseCode, body=${responseBody.take(200)}")
+                AppLogger.d(TAG, "上传响应: HTTP $responseCode, body=$responseBody")
 
                 if (responseCode in 200..299) {
                     // 更新同步状态

@@ -68,8 +68,8 @@ class SyncFragment : Fragment(), AppLogger.OnLogListener {
     override fun onLogAdded(line: String) {
         tvLog?.post {
             val current = tvLog?.text?.toString() ?: ""
-            tvLog?.text = if (current.length > 30000) {
-                current.takeLast(25000) + "\n" + line
+            tvLog?.text = if (current.length > 200000) {
+                current.takeLast(180000) + "\n" + line
             } else {
                 current + "\n" + line
             }

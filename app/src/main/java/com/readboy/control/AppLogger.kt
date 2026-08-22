@@ -32,9 +32,9 @@ object AppLogger {
             if (tr != null) {
                 logBuffer.appendLine("  ${Log.getStackTraceString(tr)}")
             }
-            // 限制日志长度
-            if (logBuffer.length > 50000) {
-                val truncated = logBuffer.substring(logBuffer.length - 40000)
+            // 限制日志长度（保留最近 200KB，确保完整 HTTP 响应不会丢失）
+            if (logBuffer.length > 200000) {
+                val truncated = logBuffer.substring(logBuffer.length - 180000)
                 logBuffer.clear()
                 logBuffer.append(truncated)
             }
