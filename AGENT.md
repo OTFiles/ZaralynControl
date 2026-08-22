@@ -311,7 +311,7 @@ CREATE TABLE IF NOT EXISTS app_allow (
 - [x] Android 10 包扫描 — 已加 `MATCH_UNINSTALLED_PACKAGES`
 - [x] 远程模式 — 未安装时自动弹窗输入序列号
 - [x] 自定义 MD3 弹窗 — 替换系统灰色 AlertDialog
-- [x] 日志完整输出（不截断）
+- [x] 日志完整输出（不截断）+ 按日期存文件（logdir/yyyy-MM-dd.log）
 - [ ] 网络请求因 Cleartext 失败时，deviceStatus 显示具体错误信息
 - [ ] 添加应用的对话框可改为 MD3 风格
 - [ ] 后台服务通知（前台服务粘性通知）
