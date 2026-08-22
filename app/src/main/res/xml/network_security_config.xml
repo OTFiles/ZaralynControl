@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 家长管理主接口域为 HTTP 明文，必须允许 cleartext -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">parent-manage.readboy.com</domain>
+        <domain includeSubdomains="true">parentadmin.readboy.com</domain>
+    </domain-config>
+</network-security-config>

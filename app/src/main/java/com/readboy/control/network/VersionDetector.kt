@@ -100,18 +100,35 @@ object VersionDetector {
         }
     }
 
-    /** 全量扫描已安装应用找家长管理 */
+    /** 全量扫描已安装应用找家长管理（兼容 Android 10 包可见性限制） */
     private fun scanForVersion(context: Context): PmsVersion {
         return try {
-            val packages = context.packageManager.getInstalledPackages(0)
+            // 参照 ZaralynSetting: 使用 MATCH_UNINSTALLED_PACKAGES 包含被强制停止的应用
+            val packages = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                context.packageManager.getInstalledPackages(
+                    android.content.pm.PackageManager.GET_PROVIDERS or
+                    android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
+                )
+            } else {
+                context.packageManager.getInstalledPackages(android.content.pm.PackageManager.GET_PROVIDERS)
+            }
             for (pkg in packages) {
                 val pn = pkg.packageName
                 if (pn.contains("parentmanager") || pn.contains("readboy.parent")) {
                     AppLogger.d(TAG, "找到候选家长管理: $pn")
                     // 尝试用其 provider 查询
-                    val auth = "$pn.AppContentProvider"
-                    val result = probeVersion(context, auth)
-                    if (result != PmsVersion.UNKNOWN) return result
+                    // 扫描所有 provider 而非简单拼接 authority
+                    val providers = pkg.providers
+                    if (providers != null) {
+                        for (pr in providers) {
+                            if (pr.authority?.contains("AppContentProvider") == true) {
+                                val auth = pr.authority!!
+                                AppLogger.d(TAG, "候选 provider: $auth")
+                                val result = probeVersion(context, auth)
+                                if (result != PmsVersion.UNKNOWN) return result
+                            }
+                        }
+                    }
                 }
             }
             PmsVersion.UNKNOWN

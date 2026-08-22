@@ -14,13 +14,15 @@ import com.readboy.control.db.MirrorDatabase
 import com.readboy.control.db.MirrorUserInfo
 import com.readboy.control.network.CloudSyncEngine
 import com.readboy.control.network.DeviceUtil
-import com.readboy.control.network.SyncEngine
-import com.readboy.control.network.VersionDetector
+import com.readboy.control.network.SignUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 class PasswordFragment : Fragment() {
 
@@ -53,37 +55,38 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 修改密码
+        // 远程模式：禁用本地密码修改，改用云端直达
+        if (DeviceUtil.isRemoteMode()) {
+            btnChangePassword.text = "上传到云端"
+            switchAllowInputPwd.isEnabled = false
+            etPassword.hint = "输入新密码，点击上传到云端"
+        }
+
+        // 修改密码 / 上传云端
         btnChangePassword.setOnClickListener {
             val newPwd = etPassword.text?.toString() ?: ""
-            scope.launch {
-                val db = MirrorDatabase.getInstance(requireContext())
-                val info = MirrorUserInfo(
-                    password = newPwd,
-                    is_long_pwd = if (newPwd.length > 6) 1 else 0,
-                    is_allow_input_pwd = if (switchAllowInputPwd.isChecked) 1 else 0,
-                    sync_status = 2
-                )
-                db.userInfoDao().clear()
-                db.userInfoDao().insert(info)
-                AppLogger.i("PasswordFragment", "密码已修改: ${if (newPwd.isEmpty()) "清除" else "设为 ${"*".repeat(newPwd.length)}"}")
-                Toast.makeText(requireContext(), "密码已保存到镜像库，点击同步生效", Toast.LENGTH_LONG).show()
+            if (DeviceUtil.isRemoteMode()) {
+                uploadPasswordToCloud(newPwd)
+            } else {
+                savePasswordToMirror(newPwd, switchAllowInputPwd.isChecked)
             }
         }
 
-        // 允许输入密码
+        // 允许输入密码（仅本地模式可用）
         switchAllowInputPwd.setOnCheckedChangeListener { _, isChecked ->
-            scope.launch {
-                val db = MirrorDatabase.getInstance(requireContext())
-                val info = db.userInfoDao().get()
-                if (info != null) {
-                    db.userInfoDao().update(info.copy(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2))
-                } else {
-                    db.userInfoDao().insert(
-                        MirrorUserInfo(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2)
-                    )
+            if (!DeviceUtil.isRemoteMode()) {
+                scope.launch {
+                    val db = MirrorDatabase.getInstance(requireContext())
+                    val info = db.userInfoDao().get()
+                    if (info != null) {
+                        db.userInfoDao().update(info.copy(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2))
+                    } else {
+                        db.userInfoDao().insert(
+                            MirrorUserInfo(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2)
+                        )
+                    }
+                    AppLogger.i("PasswordFragment", "允许输入密码: $isChecked")
                 }
-                AppLogger.i("PasswordFragment", "允许输入密码: $isChecked")
             }
         }
 
@@ -92,7 +95,7 @@ class PasswordFragment : Fragment() {
             scope.launch {
                 val imei = DeviceUtil.getEffectiveSerial()
                 if (imei.isNullOrEmpty()) {
-                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写或授权 READ_PHONE_STATE", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 Toast.makeText(requireContext(), "正在拉取云端配置 (imei=$imei)...", Toast.LENGTH_SHORT).show()
@@ -104,7 +107,7 @@ class PasswordFragment : Fragment() {
                     } else {
                         Toast.makeText(requireContext(), "远程模式：云端请求成功，未修改本地数据库", Toast.LENGTH_LONG).show()
                     }
-                    AppLogger.i("PasswordFragment", "云端拉取成功: ${result.responseBody.take(200)}")
+                    AppLogger.i("PasswordFragment", "云端拉取成功")
                 } else {
                     Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
                 }
@@ -116,7 +119,7 @@ class PasswordFragment : Fragment() {
             scope.launch {
                 val imei = DeviceUtil.getEffectiveSerial()
                 if (imei.isNullOrEmpty()) {
-                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写或授权 READ_PHONE_STATE", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 Toast.makeText(requireContext(), "正在上传到云端 (imei=$imei)...", Toast.LENGTH_SHORT).show()
@@ -126,20 +129,63 @@ class PasswordFragment : Fragment() {
         }
     }
 
-    private fun getDeviceSerial(): String? {
-        return try {
-            android.os.Build.getSerial()
-        } catch (e: SecurityException) {
-            try {
-                val proc = Runtime.getRuntime().exec("getprop ro.serialno")
-                val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
-                val serial = reader.readLine()?.trim()
-                reader.close()
-                proc.destroy()
-                serial
-            } catch (e2: Exception) {
-                AppLogger.e("PasswordFragment", "获取序列号失败: ${e2.message}", e2)
-                null
+    private fun savePasswordToMirror(newPwd: String, allowInputPwd: Boolean) {
+        scope.launch {
+            val db = MirrorDatabase.getInstance(requireContext())
+            val info = MirrorUserInfo(
+                password = newPwd,
+                is_long_pwd = if (newPwd.length > 6) 1 else 0,
+                is_allow_input_pwd = if (allowInputPwd) 1 else 0,
+                sync_status = 2
+            )
+            db.userInfoDao().clear()
+            db.userInfoDao().insert(info)
+            AppLogger.i("PasswordFragment", "密码已修改: ${if (newPwd.isEmpty()) "清除" else "已设置"}")
+            Toast.makeText(requireContext(), "密码已保存到镜像库，点击同步生效", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun uploadPasswordToCloud(newPwd: String) {
+        scope.launch {
+            val imei = DeviceUtil.getEffectiveSerial() ?: return@launch
+            withContext(Dispatchers.IO) {
+                try {
+                    val p = SignUtil.getCommonParams(imei)
+                    val body = StringBuilder()
+                        .append("signature=").append(p["signature"])
+                        .append("&imei=").append(imei)
+                        .append("&timestamp=").append(p["timestamp"])
+                        .append("&app_id=").append(p["app_id"])
+                        .append("&password=").append(newPwd)
+                        .append("&is_long_pwd=").append(if (newPwd.length > 6) 1 else 0)
+                        .toString()
+
+                    val url = URL("http://parent-manage.readboy.com/api/v1/password/upload")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 15000
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                    conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
+
+                    val code = conn.responseCode
+                    val resp = if (code in 200..299) {
+                        conn.inputStream.bufferedReader().readText()
+                    } else {
+                        conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $code"
+                    }
+                    conn.disconnect()
+
+                    AppLogger.i("PasswordFragment", "远程密码上传: HTTP $code $resp")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "密码已上传到云端: HTTP $code", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    AppLogger.e("PasswordFragment", "远程密码上传失败: ${e.message}", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "上传失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
     }

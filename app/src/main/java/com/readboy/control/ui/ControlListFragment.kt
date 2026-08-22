@@ -21,6 +21,7 @@ import com.readboy.control.R
 import com.readboy.control.ZaralynControlApp
 import com.readboy.control.db.MirrorControlItem
 import com.readboy.control.db.MirrorDatabase
+import com.readboy.control.network.DeviceUtil
 import com.readboy.control.network.SyncEngine
 import com.readboy.control.network.VersionDetector
 import com.readboy.control.service.SyncWorker
@@ -67,15 +68,39 @@ class ControlListFragment : Fragment() {
         tvStatDisabledView = tvStatDisabled
         listView.emptyView = emptyView
 
+        // 远程模式：更新流程提示 + 禁用本地按钮
+        val tvFlowHint = view.findViewById<TextView>(R.id.tvFlowHint)
+        if (DeviceUtil.isRemoteMode()) {
+            tvFlowHint.text = "远程模式：仅支持云端操作"
+            view.findViewById<View>(R.id.btnPullLocal).isEnabled = false
+            view.findViewById<View>(R.id.btnPushLocal).isEnabled = false
+        }
+
         adapter = ControlListAdapter(requireContext(), filteredItems)
         listView.adapter = adapter
 
         // 拉取/推送按钮
         view.findViewById<View>(R.id.btnPullLocal).setOnClickListener {
-            pullFromProvider()
+            if (DeviceUtil.isRemoteMode()) {
+                Toast.makeText(requireContext(), "远程模式：仅支持云端操作（密码管理页）", Toast.LENGTH_LONG).show()
+            } else {
+                pullFromProvider()
+            }
         }
         view.findViewById<View>(R.id.btnPushLocal).setOnClickListener {
-            pushToProvider()
+            if (DeviceUtil.isRemoteMode()) {
+                Toast.makeText(requireContext(), "远程模式：仅支持云端操作（密码管理页）", Toast.LENGTH_LONG).show()
+            } else {
+                pushToProvider()
+            }
+        }
+
+        // 远程模式提示
+        if (DeviceUtil.isRemoteMode()) {
+            val hint = "远程模式 - 未检测到本机家长管理\n所有操作通过 API 直接发送到云端"
+            emptyView.text = hint
+            Toast.makeText(requireContext(), hint, Toast.LENGTH_LONG).show()
+            AppLogger.i("ControlListFragment", "远程模式，仅显示镜像库")
         }
 
         // 添加应用按钮
