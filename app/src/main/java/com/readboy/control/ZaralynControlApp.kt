@@ -12,6 +12,7 @@ class ZaralynControlApp : Application() {
         super.onCreate()
         instance = this
         database = MirrorDatabase.getInstance(this)
+        AppLogger.init(this)
         AppLogger.i("ZaralynControl 初始化完成")
     }
 
