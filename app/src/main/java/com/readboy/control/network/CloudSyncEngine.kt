@@ -44,7 +44,7 @@ object CloudSyncEngine {
             AppLogger.e(TAG, "无法获取设备序列号，无法拉取云端配置")
             return@withContext CloudPullResult(false, "无法获取设备序列号")
         }
-        AppLogger.i(TAG, "===== 开始从云端拉取配置 (imei=$effectiveImei, saveToLocalDb=$saveToLocalDb) =====")
+        AppLogger.i(TAG, "===== 开始从云端拉取配置 (imei=$effectiveImei) =====")
         var lastError: String? = null
 
         for (attempt in 1..MAX_RETRY) {
