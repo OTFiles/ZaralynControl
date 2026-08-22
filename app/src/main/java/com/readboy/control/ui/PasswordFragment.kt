@@ -101,12 +101,11 @@ class PasswordFragment : Fragment() {
                 Toast.makeText(requireContext(), "正在拉取云端配置 (imei=$imei)...", Toast.LENGTH_SHORT).show()
                 val result = CloudSyncEngine.pullFromCloud(imei)
                 if (result.success && result.responseBody != null) {
-                    if (!DeviceUtil.isRemoteMode()) {
-                        CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
-                        Toast.makeText(requireContext(), "云端配置已拉取并更新镜像库", Toast.LENGTH_LONG).show()
-                    } else {
-                        Toast.makeText(requireContext(), "远程模式：云端请求成功，未修改本地数据库", Toast.LENGTH_LONG).show()
-                    }
+                    // 远程模式也写入镜像库（用户明确要求本地数据库通过云端拉取建立）
+                    CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
+                    Toast.makeText(requireContext(), "云端配置已拉取并更新镜像库", Toast.LENGTH_LONG).show()
+                    // 刷新 UI
+                    loadPasswordFromDb(etPassword, switchAllowInputPwd)
                     AppLogger.i("PasswordFragment", "云端拉取成功")
                 } else {
                     Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
@@ -125,6 +124,25 @@ class PasswordFragment : Fragment() {
                 Toast.makeText(requireContext(), "正在上传到云端 (imei=$imei)...", Toast.LENGTH_SHORT).show()
                 val result = CloudSyncEngine.pushToCloud(imei)
                 Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun loadPasswordFromDb(
+        etPassword: TextInputEditText,
+        switchAllowInputPwd: MaterialSwitch
+    ) {
+        scope.launch {
+            val db = MirrorDatabase.getInstance(requireContext())
+            val info = db.userInfoDao().get()
+            if (info != null) {
+                etPassword.setText(info.password)
+                switchAllowInputPwd.isChecked = info.is_allow_input_pwd == 1
+                AppLogger.i("PasswordFragment", "UI已刷新: password=${if (info.password.isNotEmpty()) "已设置" else "未设置"}, allow_input_pwd=${info.is_allow_input_pwd}")
+            } else {
+                etPassword.setText("")
+                switchAllowInputPwd.isChecked = true
+                AppLogger.i("PasswordFragment", "镜像库无密码记录，UI已清空")
             }
         }
     }

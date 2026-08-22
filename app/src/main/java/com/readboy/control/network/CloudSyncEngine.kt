@@ -34,12 +34,10 @@ object CloudSyncEngine {
 
     /**
      * 从云端全量拉取管控配置
-     * @param imei 设备序列号。null 时使用 DeviceUtil.getEffectiveSerial()（优先自定义远程序列号）
-     * @param saveToLocalDb 是否写入本地镜像库（远程模式=false，仅发请求）
+     * @param imei 设备序列号。null 时使用 DeviceUtil.getEffectiveSerial()
      */
     suspend fun pullFromCloud(
-        imei: String? = null,
-        saveToLocalDb: Boolean = !DeviceUtil.isRemoteMode()
+        imei: String? = null
     ): CloudPullResult = withContext(Dispatchers.IO) {
         val effectiveImei = imei ?: DeviceUtil.getEffectiveSerial()
         if (effectiveImei.isNullOrEmpty()) {

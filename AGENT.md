@@ -70,8 +70,8 @@
 |------|---------|---------|
 | 拉取按钮 | 从家长管理拉取 → ContentProvider | 从远程拉取 → `jpush/content` API |
 | 覆盖按钮 | 覆盖家长管理 → ContentProvider | 覆盖远程 → `controlApp/upload` API |
-| 密码修改 | 写入镜像库 | 直接 POST `password/upload` |
-| 数据库 | 读写镜像库 + Provider | 读写镜像库（仅云端，后台无感） |
+| 密码修改 | 写入镜像库 | 直接 POST `password/upload`（同时写入镜像库备份） |
+| 数据库 | 读写镜像库 + Provider | 读写镜像库（云端拉取建立本地数据库） |
 
 关键方法：
 - `DeviceUtil.getEffectiveSerial()` — 优先返回自定义序列号，否则本机序列号

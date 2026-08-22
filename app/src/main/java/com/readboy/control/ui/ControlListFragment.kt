@@ -202,13 +202,17 @@ class ControlListFragment : Fragment() {
                 Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
                 return@launch
             }
+            AppLogger.i("ControlListFragment", "1/3 发送请求 imei=$imei")
             val result = CloudSyncEngine.pullFromCloud(imei)
+            AppLogger.i("ControlListFragment", "2/3 请求完成 success=${result.success}, bodyLen=${result.responseBody?.length ?: 0}")
             if (result.success && result.responseBody != null) {
-                // 云端拉取结果写入镜像库（后台维护，用户无感）
+                // 云端拉取结果写入镜像库（远程模式同样写入，用云端数据建立本地数据库）
                 CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
+                AppLogger.i("ControlListFragment", "3/3 镜像库已更新，刷新列表")
                 Toast.makeText(requireContext(), "已从远程拉取 ${result.responseBody.length} bytes", Toast.LENGTH_LONG).show()
                 reloadFromMirror()
             } else {
+                AppLogger.w("ControlListFragment", "拉取失败: ${result.message}")
                 Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
             }
         }
