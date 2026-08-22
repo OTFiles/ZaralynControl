@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="360dp"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="?attr/colorSurface">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="28dp">
+
+            <!-- 标题 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="未检测到家长管理"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorOnSurface" />
+
+            <!-- 说明 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="本机未安装家长管理 App，将进入远程管控模式。\n请输入目标设备的序列号（imei），所有操作将通过 API 直接发送到云端。"
+                android:textSize="14sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:lineSpacingExtra="4dp" />
+
+            <!-- 输入框 -->
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:hint="设备序列号 (imei)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/dialogSerialInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:importantForAutofill="no" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 按钮 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/dialogBtnLater"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="稍后设置"
+                    android:layout_marginEnd="12dp"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/dialogBtnEnter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="进入远程模式" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</LinearLayout>

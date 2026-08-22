@@ -21,6 +21,7 @@ import com.readboy.control.R
 import com.readboy.control.ZaralynControlApp
 import com.readboy.control.db.MirrorControlItem
 import com.readboy.control.db.MirrorDatabase
+import com.readboy.control.network.CloudSyncEngine
 import com.readboy.control.network.DeviceUtil
 import com.readboy.control.network.SyncEngine
 import com.readboy.control.network.VersionDetector
@@ -68,39 +69,34 @@ class ControlListFragment : Fragment() {
         tvStatDisabledView = tvStatDisabled
         listView.emptyView = emptyView
 
-        // 远程模式：更新流程提示 + 禁用本地按钮
+        // 远程模式：更新按钮文本和流程提示
+        val btnPull = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPullLocal)
+        val btnPush = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPushLocal)
         val tvFlowHint = view.findViewById<TextView>(R.id.tvFlowHint)
-        if (DeviceUtil.isRemoteMode()) {
-            tvFlowHint.text = "远程模式：仅支持云端操作"
-            view.findViewById<View>(R.id.btnPullLocal).isEnabled = false
-            view.findViewById<View>(R.id.btnPushLocal).isEnabled = false
+        val isRemote = DeviceUtil.isRemoteMode()
+        if (isRemote) {
+            tvFlowHint.text = "远程模式：1. 拉取 2. 修改开关 3. 覆盖远程"
+            btnPull.text = getString(R.string.btn_pull_remote)
+            btnPush.text = getString(R.string.btn_push_remote)
         }
 
         adapter = ControlListAdapter(requireContext(), filteredItems)
         listView.adapter = adapter
 
         // 拉取/推送按钮
-        view.findViewById<View>(R.id.btnPullLocal).setOnClickListener {
-            if (DeviceUtil.isRemoteMode()) {
-                Toast.makeText(requireContext(), "远程模式：仅支持云端操作（密码管理页）", Toast.LENGTH_LONG).show()
+        btnPull.setOnClickListener {
+            if (isRemote) {
+                pullFromCloud()
             } else {
                 pullFromProvider()
             }
         }
-        view.findViewById<View>(R.id.btnPushLocal).setOnClickListener {
-            if (DeviceUtil.isRemoteMode()) {
-                Toast.makeText(requireContext(), "远程模式：仅支持云端操作（密码管理页）", Toast.LENGTH_LONG).show()
+        btnPush.setOnClickListener {
+            if (isRemote) {
+                pushToCloud()
             } else {
                 pushToProvider()
             }
-        }
-
-        // 远程模式提示
-        if (DeviceUtil.isRemoteMode()) {
-            val hint = "远程模式 - 未检测到本机家长管理\n所有操作通过 API 直接发送到云端"
-            emptyView.text = hint
-            Toast.makeText(requireContext(), hint, Toast.LENGTH_LONG).show()
-            AppLogger.i("ControlListFragment", "远程模式，仅显示镜像库")
         }
 
         // 添加应用按钮
@@ -193,6 +189,54 @@ class ControlListFragment : Fragment() {
             val result = SyncEngine.pushToProvider(requireContext())
             AppLogger.i("ControlListFragment", "覆盖结果: ${result.message}")
             Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** 远程模式：从云端拉取并更新镜像库 */
+    private fun pullFromCloud() {
+        AppLogger.i("ControlListFragment", "远程模式：从云端拉取配置")
+        Toast.makeText(requireContext(), "正在从云端拉取...", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val imei = DeviceUtil.getEffectiveSerial()
+            if (imei.isNullOrEmpty()) {
+                Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val result = CloudSyncEngine.pullFromCloud(imei)
+            if (result.success && result.responseBody != null) {
+                // 云端拉取结果写入镜像库（后台维护，用户无感）
+                CloudSyncEngine.parseAndUpdateMirror(requireContext(), result.responseBody)
+                Toast.makeText(requireContext(), "已从远程拉取 ${result.responseBody.length} bytes", Toast.LENGTH_LONG).show()
+                reloadFromMirror()
+            } else {
+                Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** 远程模式：将镜像库配置上传到云端 */
+    private fun pushToCloud() {
+        AppLogger.i("ControlListFragment", "远程模式：覆盖远程配置")
+        Toast.makeText(requireContext(), "正在上传到云端...", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            val imei = DeviceUtil.getEffectiveSerial()
+            if (imei.isNullOrEmpty()) {
+                Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val result = CloudSyncEngine.pushToCloud(imei)
+            Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** 从镜像库重新加载列表 */
+    private fun reloadFromMirror() {
+        scope.launch {
+            val db = MirrorDatabase.getInstance(requireContext())
+            val list = db.controlListDao().getAll()
+            items.clear()
+            items.addAll(list)
+            filterAndUpdate(statsCardView, tvStatTotalView, tvStatAllowedView, tvStatDisabledView)
         }
     }
 

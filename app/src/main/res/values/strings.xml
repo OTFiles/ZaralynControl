@@ -15,6 +15,8 @@
     <string name="btn_push_cloud">上传云端</string>
     <string name="btn_pull_local">从家长管理拉取</string>
     <string name="btn_push_local">覆盖家长管理</string>
+    <string name="btn_pull_remote">从远程拉取</string>
+    <string name="btn_push_remote">覆盖远程</string>
     <string name="btn_add_app">添加应用</string>
     <string name="btn_copy_log">复制日志</string>
     <string name="btn_clear_log">清空日志</string>

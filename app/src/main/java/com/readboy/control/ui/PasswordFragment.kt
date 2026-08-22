@@ -176,7 +176,7 @@ class PasswordFragment : Fragment() {
                     }
                     conn.disconnect()
 
-                    AppLogger.i("PasswordFragment", "远程密码上传: HTTP $code $resp")
+                    AppLogger.i("PasswordFragment", "远程密码上传: HTTP $code ${resp.take(200)}")
                     withContext(Dispatchers.Main) {
                         Toast.makeText(requireContext(), "密码已上传到云端: HTTP $code", Toast.LENGTH_LONG).show()
                     }
