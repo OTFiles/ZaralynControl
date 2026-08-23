@@ -211,18 +211,23 @@ object CloudSyncEngine {
                 conn.readTimeout = 15000
                 conn.doOutput = true
 
-                // 设置 Header
-                conn.setRequestProperty("sn", SignUtil.getSign(uid, timestampMs))
-                conn.setRequestProperty("signature", SignUtil.getSign2(timestampMs))
-                conn.setRequestProperty("imei", effectiveImei)
-                conn.setRequestProperty("timestamp", seconds.toString())
-                conn.setRequestProperty("app_id", "parent-manage")
-                conn.setRequestProperty("control_list", uploadJson)
-                conn.setRequestProperty("initialize", "1")
-                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                // parentadmin 域签名：必须用 getSign 长签名（uid 参与），getSign2 短 MD5 报 7001
+                val sign = SignUtil.getSign(uid, timestampMs)
 
-                // 发送标准参数为 body
-                val body = SignUtil.getCommonQueryString(effectiveImei, timestampMs)
+                // 请求体（仿照反编译 UploadOnlineControlAppResponse）：
+                // imei + control_list + initialize + sn（getSign 长签名）
+                // 另加 signature 也传长签名（ZaralynUnbind 验证 signature+sn 双参数需同时传）
+                val body = StringBuilder()
+                    .append("imei=").append(effectiveImei)
+                    .append("&control_list=").append(java.net.URLEncoder.encode(uploadJson, "UTF-8"))
+                    .append("&initialize=1")
+                    .append("&sn=").append(sign)
+                    .append("&signature=").append(sign)
+                    .append("&timestamp=").append(seconds)
+                    .append("&app_id=parent-manage")
+                    .toString()
+
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
                 conn.outputStream.use { os ->
                     os.write(body.toByteArray(Charsets.UTF_8))
                 }
