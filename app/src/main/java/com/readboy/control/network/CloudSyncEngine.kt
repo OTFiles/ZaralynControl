@@ -337,7 +337,8 @@ object CloudSyncEngine {
     // ==================== 上传 JSON 结构 ====================
 
     data class UploadControlItem(
-        val packageName: String,
+        // 关键：Gson 默认序列化为 camelCase "packageName"，服务器实际接收 snake_case "pack_name"
+        @SerializedName("pack_name") val packageName: String,
         val status: Int,
         val operation: String,
         @SerializedName("system_mode") val system_mode: Int = 0
