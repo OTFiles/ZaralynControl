@@ -197,7 +197,15 @@ class PasswordFragment : Fragment() {
 
                     AppLogger.i("PasswordFragment", "远程密码上传: HTTP $code $resp")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "密码已上传到云端: HTTP $code", Toast.LENGTH_LONG).show()
+                        val ok = try {
+                            val json = com.google.gson.JsonParser.parseString(resp).asJsonObject
+                            json.get("status")?.asInt == 1
+                        } catch (e: Exception) { false }
+                        if (ok) {
+                            Toast.makeText(requireContext(), "密码已上传到云端", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(requireContext(), "上传结果: $resp", Toast.LENGTH_LONG).show()
+                        }
                     }
                 } catch (e: Exception) {
                     AppLogger.e("PasswordFragment", "远程密码上传失败: ${e.message}", e)
@@ -241,7 +249,15 @@ class PasswordFragment : Fragment() {
 
                     AppLogger.i("PasswordFragment", "允许输入密码上传: HTTP $code $resp")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "允许输入密码已上传到云端: HTTP $code", Toast.LENGTH_LONG).show()
+                        val ok = try {
+                            val json = com.google.gson.JsonParser.parseString(resp).asJsonObject
+                            json.get("status")?.asInt == 1
+                        } catch (e: Exception) { false }
+                        if (ok) {
+                            Toast.makeText(requireContext(), "允许输入密码已上传到云端", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(requireContext(), "上传结果: $resp", Toast.LENGTH_LONG).show()
+                        }
                     }
                 } catch (e: Exception) {
                     AppLogger.e("PasswordFragment", "允许输入密码上传失败: ${e.message}", e)

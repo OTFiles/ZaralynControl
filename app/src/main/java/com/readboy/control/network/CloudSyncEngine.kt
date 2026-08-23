@@ -243,11 +243,26 @@ object CloudSyncEngine {
                 AppLogger.d(TAG, "上传响应: HTTP $responseCode, body=$responseBody")
 
                 if (responseCode in 200..299) {
-                    // 更新同步状态
-                    items.forEach { item ->
-                        db.controlListDao().updateSyncStatus(item.package_name, 3) // 云端已上传
+                    // 检查 body 中的 status 字段（HTTP 200 不一定成功，errno 7001 也返回 200）
+                    val uploadResp = try {
+                        gson.fromJson(responseBody, UploadResponse::class.java)
+                    } catch (e: Exception) { null }
+
+                    if (uploadResp != null && uploadResp.status == 1) {
+                        // 更新同步状态
+                        items.forEach { item ->
+                            db.controlListDao().updateSyncStatus(item.package_name, 3) // 云端已上传
+                        }
+                        return@withContext CloudPushResult(true, "上传成功: ${uploadList.size} 项")
+                    } else {
+                        val errMsg = if (uploadResp != null) {
+                            "上传失败: errno=${uploadResp.errno} ${uploadResp.errmsg}"
+                        } else {
+                            "上传失败: 无法解析响应"
+                        }
+                        lastError = errMsg
+                        AppLogger.w(TAG, "上传失败(尝试$attempt): $lastError")
                     }
-                    return@withContext CloudPushResult(true, "上传成功: ${uploadList.size} 项")
                 } else {
                     lastError = "HTTP $responseCode $responseBody"
                     AppLogger.w(TAG, "上传失败(尝试$attempt): $lastError")
@@ -309,6 +324,14 @@ object CloudSyncEngine {
         @SerializedName("switch_id") val switch_id: Int? = null,
         @SerializedName("switch_name") val switch_name: String? = null,
         @SerializedName("switch_state") val switch_state: Int? = null
+    )
+
+    // ==================== 上传响应 ====================
+
+    data class UploadResponse(
+        val status: Int = 0,
+        val errno: Int = 0,
+        val errmsg: String? = null
     )
 
     // ==================== 上传 JSON 结构 ====================
