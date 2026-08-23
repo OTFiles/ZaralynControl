@@ -175,7 +175,7 @@ class PasswordFragment : Fragment() {
                         .append("&imei=").append(imei)
                         .append("&timestamp=").append(p["timestamp"])
                         .append("&app_id=").append(p["app_id"])
-                        .append("&password=").append(newPwd)
+                        .append("&password=").append(java.net.URLEncoder.encode(newPwd, "UTF-8"))
                         .append("&is_long_pwd=").append(if (newPwd.length > 6) 1 else 0)
                         .toString()
 
