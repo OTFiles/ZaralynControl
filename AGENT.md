@@ -164,16 +164,13 @@ GET http://parent-manage.readboy.com/api/v1/jpush/content?get_all=1
 
 ```
 POST https://parentadmin.readboy.com/v1/appinfo/controlApp/upload
-Headers:
-  signature: getSign2()
-  sn: getSign(uid, timestampMs)
-  imei: {serial}
-  timestamp: {秒}
-  app_id: parent-manage
-  initialize: 1
-  control_list: JSON.stringify([{packageName, status, operation, system_mode}])
-Body: signature=...&imei=...&timestamp=...&app_id=parent-manage
+Body (form-urlencoded):
+  imei={serial}&control_list={urlencoded json}&initialize=1
+  &sn={getSign 长签名}&signature={getSign 长签名}
+  &timestamp={秒}&app_id=parent-manage
 ```
+
+**⚠️ parentadmin 域验证 signature 使用 getSign 长签名（uid 参与），getSign2 短 MD5 报 7001「签名不能为空」。**
 
 ### 密码上传 (password/upload)
 
