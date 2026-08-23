@@ -4,8 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.tabs.TabLayoutMediator
 import com.readboy.control.R
 import com.readboy.control.databinding.ActivityMainBinding
@@ -53,7 +53,6 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    /** 自定义 MD3 风格弹窗（非系统灰色弹窗） */
     private fun showRemoteModeDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_remote_mode, null)
         val btnLater = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.dialogBtnLater)
@@ -63,10 +62,12 @@ class MainActivity : AppCompatActivity() {
         // 预填之前保存的序列号
         serialInput.setText(DeviceUtil.getRemoteSerial() ?: "")
 
-        val dialog = MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog_Centered)
+        val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
             .create()
+        // 透明背景，只显示自定义卡片
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
 
         btnLater.setOnClickListener {
             dialog.dismiss()

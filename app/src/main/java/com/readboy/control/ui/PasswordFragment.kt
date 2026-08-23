@@ -55,10 +55,9 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 远程模式：禁用本地密码修改，改用云端直达
+        // 远程模式：按钮改为云端直达，允许输入密码开关通过 API 上传
         if (DeviceUtil.isRemoteMode()) {
             btnChangePassword.text = "上传到云端"
-            switchAllowInputPwd.isEnabled = false
             etPassword.hint = "输入新密码，点击上传到云端"
         }
 
@@ -72,9 +71,11 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 允许输入密码（仅本地模式可用）
+        // 允许输入密码（远程模式 → 云端 API；本地模式 → 镜像库）
         switchAllowInputPwd.setOnCheckedChangeListener { _, isChecked ->
-            if (!DeviceUtil.isRemoteMode()) {
+            if (DeviceUtil.isRemoteMode()) {
+                uploadAllowInputPwdToCloud(isChecked)
+            } else {
                 scope.launch {
                     val db = MirrorDatabase.getInstance(requireContext())
                     val info = db.userInfoDao().get()
@@ -200,6 +201,50 @@ class PasswordFragment : Fragment() {
                     }
                 } catch (e: Exception) {
                     AppLogger.e("PasswordFragment", "远程密码上传失败: ${e.message}", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "上传失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun uploadAllowInputPwdToCloud(allowInputPwd: Boolean) {
+        scope.launch {
+            val imei = DeviceUtil.getEffectiveSerial() ?: return@launch
+            withContext(Dispatchers.IO) {
+                try {
+                    val p = SignUtil.getCommonParams(imei)
+                    val body = StringBuilder()
+                        .append("signature=").append(p["signature"])
+                        .append("&imei=").append(imei)
+                        .append("&timestamp=").append(p["timestamp"])
+                        .append("&app_id=").append(p["app_id"])
+                        .append("&allow_pwd=").append(if (allowInputPwd) 1 else 0)
+                        .toString()
+
+                    val url = URL("http://parent-manage.readboy.com/api/v1/uploadAllowPwd")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.connectTimeout = 15000
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                    conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
+
+                    val code = conn.responseCode
+                    val resp = if (code in 200..299) {
+                        conn.inputStream.bufferedReader().readText()
+                    } else {
+                        conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $code"
+                    }
+                    conn.disconnect()
+
+                    AppLogger.i("PasswordFragment", "允许输入密码上传: HTTP $code $resp")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "允许输入密码已上传到云端: HTTP $code", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    AppLogger.e("PasswordFragment", "允许输入密码上传失败: ${e.message}", e)
                     withContext(Dispatchers.Main) {
                         Toast.makeText(requireContext(), "上传失败: ${e.message}", Toast.LENGTH_LONG).show()
                     }
