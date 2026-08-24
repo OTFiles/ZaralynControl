@@ -75,9 +75,11 @@ class ControlListFragment : Fragment() {
         val tvFlowHint = view.findViewById<TextView>(R.id.tvFlowHint)
         val isRemote = DeviceUtil.isRemoteMode()
         if (isRemote) {
-            tvFlowHint.text = "远程模式：1. 拉取 2. 修改开关 3. 覆盖远程"
+            tvFlowHint.text = "远程模式：仅支持云端拉取配置（服务器只读）"
             btnPull.text = getString(R.string.btn_pull_remote)
-            btnPush.text = getString(R.string.btn_push_remote)
+            btnPush.isEnabled = false
+            btnPush.alpha = 0.5f
+            btnPush.text = "服务器只读"
         }
 
         adapter = ControlListAdapter(requireContext(), filteredItems)
@@ -93,7 +95,7 @@ class ControlListFragment : Fragment() {
         }
         btnPush.setOnClickListener {
             if (isRemote) {
-                pushToCloud()
+                Toast.makeText(requireContext(), "服务器只读：不支持远程修改管控列表", Toast.LENGTH_LONG).show()
             } else {
                 pushToProvider()
             }

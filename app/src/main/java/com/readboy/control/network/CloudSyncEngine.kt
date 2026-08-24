@@ -139,14 +139,40 @@ object CloudSyncEngine {
                 AppLogger.i(TAG, "更新密码: ${if (pwdStr.isNotEmpty()) "已设置" else "未设置"}")
             }
 
-            // 更新 allow_input_pwd 开关
+            // 更新 allow_input_pwd 开关（用户信息表，UI 从该表读取）
             response.data?.allow_input_pwd?.let { aip ->
+                val aipStatus = aip.status ?: 1
+                // 写入开关表（通用开关记录）
                 db.switchDao().insert(
                     com.readboy.control.db.MirrorSwitchItem(
                         switch_name = "allow_input_pwd",
-                        status = aip.status ?: 1
+                        status = aipStatus
                     )
                 )
+                // 同步到 user_info 表（UI 从 userInfoDao 读取）
+                val existing = db.userInfoDao().get()
+                if (existing != null) {
+                    db.userInfoDao().update(existing.copy(is_allow_input_pwd = aipStatus))
+                } else {
+                    db.userInfoDao().insert(
+                        com.readboy.control.db.MirrorUserInfo(
+                            is_allow_input_pwd = aipStatus
+                        )
+                    )
+                }
+                AppLogger.i(TAG, "allow_input_pwd: status=$aipStatus（${if (aipStatus == 1) "允许输入密码" else "禁止输入密码"}）")
+            }
+
+            // 更新 allow_pwd（应用启动密码开关）
+            response.data?.allow_pwd?.let { ap ->
+                val apStatus = ap.status ?: 1
+                db.switchDao().insert(
+                    com.readboy.control.db.MirrorSwitchItem(
+                        switch_name = "allow_pwd",
+                        status = apStatus
+                    )
+                )
+                AppLogger.i(TAG, "allow_pwd: status=$apStatus")
             }
 
             // 更新其他开关
@@ -295,6 +321,7 @@ object CloudSyncEngine {
         @SerializedName("app_control") val app_control: AppControl? = null,
         val password: PasswordItem? = null,
         @SerializedName("allow_input_pwd") val allow_input_pwd: AllowInputPwd? = null,
+        @SerializedName("allow_pwd") val allow_pwd: AllowInputPwd? = null,
         @SerializedName("switch_list") val switch_list: List<SwitchListItem>? = null,
         @SerializedName("synchronize_data") val synchronize_data: Int? = null
     )

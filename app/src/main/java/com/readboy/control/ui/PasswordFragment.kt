@@ -55,10 +55,13 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 远程模式：按钮改为云端直达，允许输入密码开关通过 API 上传
+        // 远程模式：服务器只读（接口返回 status:1 但不持久化），仅允许拉取查看
         if (DeviceUtil.isRemoteMode()) {
-            btnChangePassword.text = "上传到云端"
-            etPassword.hint = "输入新密码，点击上传到云端"
+            btnChangePassword.text = "服务器只读"
+            btnChangePassword.isEnabled = false
+            switchAllowInputPwd.isEnabled = false
+            etPassword.isEnabled = false
+            etPassword.hint = "远程模式仅可查看云端密码"
         }
 
         // 修改密码 / 上传云端
