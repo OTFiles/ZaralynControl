@@ -115,6 +115,8 @@ object CloudSyncEngine {
                         // 实测修正：status={0,2} 都禁用，仅 status=1 放行
                         disabled_state = if (item.status == 1) 0 else 1,
                         app_type = item.app_type ?: 0,
+                        // 关键：system_mode 服务器校验用，必须原样保存并回传
+                        system_mode = item.system_mode ?: 0,
                         sync_status = 1
                     )
                 }
@@ -240,13 +242,12 @@ object CloudSyncEngine {
                 // parentadmin 域签名：必须用 getSign 长签名（uid 参与），getSign2 短 MD5 报 7001
                 val sign = SignUtil.getSign(uid, timestampMs)
 
-                // 请求体（仿照反编译 UploadOnlineControlAppResponse）：
-                // imei + control_list + initialize + sn（getSign 长签名）
-                // 另加 signature 也传长签名（ZaralynUnbind 验证 signature+sn 双参数需同时传）
+                // 请求体（blend：原版 getParams()=headers map 含 sn，另补 signature 长签名+基础参数）
+                // initialize=0（日常修改，非首次初始化）
                 val body = StringBuilder()
                     .append("imei=").append(effectiveImei)
                     .append("&control_list=").append(java.net.URLEncoder.encode(uploadJson, "UTF-8"))
-                    .append("&initialize=1")
+                    .append("&initialize=0")
                     .append("&sn=").append(sign)
                     .append("&signature=").append(sign)
                     .append("&timestamp=").append(seconds)
@@ -335,7 +336,11 @@ object CloudSyncEngine {
         val status: Int = 0,
         val operated: Int? = null,
         @SerializedName("app_name") val app_name: String? = null,
-        @SerializedName("app_type") val app_type: Int? = null
+        @SerializedName("app_type") val app_type: Int? = null,
+        @SerializedName("system_mode") val system_mode: Int? = null,
+        @SerializedName("can_uninstall") val can_uninstall: Int? = null,
+        @SerializedName("second_type") val second_type: String? = null,
+        @SerializedName("extra") val extra: Int? = null
     )
 
     data class PasswordItem(
@@ -368,7 +373,12 @@ object CloudSyncEngine {
         @SerializedName("pack_name") val packageName: String,
         val status: Int,
         val operation: String,
-        @SerializedName("system_mode") val system_mode: Int = 0
+        @SerializedName("system_mode") val system_mode: Int = 0,
+        @SerializedName("can_uninstall") val can_uninstall: Int = 1,
+        @SerializedName("second_type") val second_type: String? = null,
+        @SerializedName("app_time") val app_time: Any? = null,
+        @SerializedName("temp_use") val temp_use: Any? = null,
+        @SerializedName("anti_addiction") val anti_addiction: Any? = null
     )
 
     // ==================== 结果 ====================
