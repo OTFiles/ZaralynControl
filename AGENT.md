@@ -49,7 +49,7 @@
 
 ### 云端同步引擎 (CloudSyncEngine.kt)
 
-- `pullFromCloud(imei, saveToLocalDb)` — 调用 `jpush/content?get_all=1` 拉取全量配置
+- `pullFromCloud(imei)` — 调用 `jpush/content?get_all=1` 拉取全量配置（saveToLocalDb 参数已移除）
 - `parseAndUpdateMirror(context, responseBody)` — 解析云端响应并更新镜像库
 - `pushToCloud(imei, uid)` — 上传管控列表到 `controlApp/upload`
 - 重试策略：3 次，每次 2 秒间隔
@@ -134,7 +134,7 @@ fun getSign(uid: String, timestampMs: Long): String {
 **⚠️ 关键区别**：
 - `getSign2` 用于 `parent-manage.readboy.com` 域（signature 参数）
 - `getSign` 用于 `parentadmin.readboy.com` 域（sn header + signature 参数）
-- 签名用秒（10位），请求 timestamp 参数用毫秒（13位）
+- 签名和 timestamp 参数**都用秒**（10位）— `getTimestamp()` = `timestamp/1000`，代码为准
 - 解绑 `cancel_bindings` 必须用 getSign 长签名 + 同时传 `signature` 和 `sn` 两个参数
 
 ---
@@ -165,12 +165,21 @@ GET http://parent-manage.readboy.com/api/v1/jpush/content?get_all=1
 ```
 POST https://parentadmin.readboy.com/v1/appinfo/controlApp/upload
 Body (form-urlencoded):
-  imei={serial}&control_list={urlencoded json}&initialize=1
+  imei={serial}&control_list={urlencoded json}&initialize=0
   &sn={getSign 长签名}&signature={getSign 长签名}
   &timestamp={秒}&app_id=parent-manage
 ```
 
 **⚠️ parentadmin 域验证 signature 使用 getSign 长签名（uid 参与），getSign2 短 MD5 报 7001「签名不能为空」。**
+
+**⚠️ 上传控制项字段（反编译 UploadOnlineAppInfo，`@SerializedName` 全 snake_case）**：
+```json
+[{"pack_name":"com.xxx","status":0,"operation":"update","system_mode":2,"can_uninstall":1,"second_type":null,"app_time":null,"temp_use":null,"anti_addiction":null}]
+```
+- **`pack_name` 不是 `packageName`** — Gson 默认 camelCase，必须 `@SerializedName("pack_name")`
+- **`system_mode` 必须回传云端原值**（2/404/1/0）— 之前传 0 导致服务器拒绝应用（返回 status:1 但不生效）
+- **`initialize` 日常修改用 0**（非首次初始化），1 表示首次全量
+- 上传成功判断：HTTP 200 **且** body `{"status":1}`，否则如 errno 7001 也是 HTTP 200
 
 ### 密码上传 (password/upload)
 
@@ -187,6 +196,14 @@ Body: signature={getSign2}&imei=...&timestamp=秒&app_id=parent-manage&allow=1/0
 ```
 
 **⚠️ 反编译 UploadAllowPwdResponse 确认：参数名是 `allow`（不是 allow_pwd！）**，值对应服务器 `allow_pwd` 字段（rby_enable_start_app_by_password 应用启动密码）。传 `allow_pwd` 服务器返回 status:1 但不生效。
+
+### ⚠️ allow_input_pwd vs allow_pwd 语义区分（重要！）
+
+服务器返回两个不同字段：
+- **`allow_input_pwd`**（开机/进入家长管理时密码框是否允许输入）→ 仅服务器下发，**无上传接口**，设备端改不了。`no_allow_input_pwd=true` 时键盘点击 Toast「根据管控策略，本机禁止输入密码」
+- **`allow_pwd`**（应用启动密码，rby_enable_start_app_by_password）→ 可上传（uploadAllowPwd 的 `allow` 参数）
+
+UI 开关控制的是 `allow_pwd`（可上传的那个）。若用户想改的是 allow_input_pwd，无接口可用。
 
 ### 解绑 (cancel_bindings)
 
@@ -256,6 +273,31 @@ CREATE TABLE IF NOT EXISTS user_info (
 );
 ```
 
+### new_time_control（时间管控，6.2.8+）
+
+```sql
+CREATE TABLE IF NOT EXISTS new_time_control (
+  _id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tid long,
+  _group varchar(200),        -- group 是保留字，字段名用 _group
+  total_time long,
+  period_status int,
+  periods varchar(1000)       -- JSON 数组 [{"start":28800,"end":82800}]
+);
+```
+
+### time_control_record（设备已用时间记录）
+
+```sql
+CREATE TABLE IF NOT EXISTS time_control_record (
+  week INTEGER UNIQUE ON CONFLICT REPLACE,
+  used_time integer,
+  used_time_control integer,
+  enable integer,
+  flag integer
+);
+```
+
 ### app_limited（管控时长限制）
 
 ```sql
@@ -300,6 +342,37 @@ CREATE TABLE IF NOT EXISTS app_allow (
 
 ---
 
+## 时间管控（control_time）— 无上传接口！
+
+### 数据结构（jpush/content 返回，实测）
+
+```json
+"control_time": {
+  "anti_addiction": {"use_duration": 3600, "rest_duration": 1800},
+  "control_time_list": [{
+    "tid": 3462940,
+    "group": "1,2,3,4,5,6,0",
+    "total_time": 14400,          // 秒，每日管控总时长（14400=4小时）
+    "period_status": 1,
+    "periods": [{"start": 28800, "end": 82800}]  // 8:00-23:00
+  }],
+  "model_whitelist": 1,
+  "time_lock_status": 0
+}
+```
+
+### 逆向结论（2026-08 彻底排查）
+
+- **只有拉取（jpush/content），没有设备端上传接口** — 与 allow_input_pwd 相同，服务器单向下发
+- 已排查：全部 30+ Response 类、全部 API URL 常量、SyncHandler 全部消息分支（171 条 packed-switch）
+- 拉取处理：GetOnlineAppResponse2 → TimeControlHelper 存 `new_time_control` 表（先 deleteAll 再 insert）
+- 本地改表**会被服务器下次拉取覆盖**（拉取时 deleteAll 重建）
+- 可执行方案：仅展示配置；本地模式可直接改 new_time_control 表（临时生效）
+
+---
+
+---
+
 ## 构建方式
 
 - GitHub Actions 自动构建（双 job: build + release）
@@ -318,6 +391,10 @@ CREATE TABLE IF NOT EXISTS app_allow (
 - [x] 远程模式 — 未安装时自动弹窗输入序列号
 - [x] 自定义 MD3 弹窗 — 替换系统灰色 AlertDialog
 - [x] 日志完整输出（不截断）+ 按日期存文件（logdir/yyyy-MM-dd.log）
+- [x] 管控列表上传修正 — system_mode 回传 + initialize=0 + pack_name 字段名（已生效）
+- [x] uploadAllowPwd 参数名修正 — allow_pwd→allow（已生效，但控制的是 allow_pwd 非 allow_input_pwd）
+- [ ] **allow_input_pwd 无法修改** — 无上传接口（服务器单向下发），用户预期落空，需向用户说明
+- [ ] **时间管控无法修改** — 无上传接口，仅可展示；本地模式改 new_time_control 表会被拉取覆盖
 - [ ] 网络请求因 Cleartext 失败时，deviceStatus 显示具体错误信息
 - [ ] 添加应用的对话框可改为 MD3 风格
 - [ ] 后台服务通知（前台服务粘性通知）
