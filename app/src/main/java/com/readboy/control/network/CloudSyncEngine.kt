@@ -165,7 +165,7 @@ object CloudSyncEngine {
                 AppLogger.i(TAG, "allow_input_pwd: status=$aipStatus（${if (aipStatus == 1) "允许输入密码" else "禁止输入密码"}）")
             }
 
-            // 更新 allow_pwd（应用启动密码开关）
+            // 更新 allow_pwd（应用启动密码开关，可上传，UI 开关对应此值）
             response.data?.allow_pwd?.let { ap ->
                 val apStatus = ap.status ?: 1
                 db.switchDao().insert(
@@ -174,7 +174,16 @@ object CloudSyncEngine {
                         status = apStatus
                     )
                 )
-                AppLogger.i(TAG, "allow_pwd: status=$apStatus")
+                // 同步到 user_info 表（UI 从 userInfoDao 读取开关状态）
+                val existing = db.userInfoDao().get()
+                if (existing != null) {
+                    db.userInfoDao().update(existing.copy(is_allow_input_pwd = apStatus))
+                } else {
+                    db.userInfoDao().insert(
+                        com.readboy.control.db.MirrorUserInfo(is_allow_input_pwd = apStatus)
+                    )
+                }
+                AppLogger.i(TAG, "allow_pwd: status=$apStatus（UI 开关=${if (apStatus == 1) "开" else "关"}）")
             }
 
             // 更新其他开关

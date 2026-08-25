@@ -228,7 +228,9 @@ class PasswordFragment : Fragment() {
                         .append("&imei=").append(imei)
                         .append("&timestamp=").append(p["timestamp"])
                         .append("&app_id=").append(p["app_id"])
-                        .append("&allow_pwd=").append(if (allowInputPwd) 1 else 0)
+                        // 反编译 UploadAllowPwdResponse：参数名是 allow（不是 allow_pwd）
+                        // 值对应服务器 allow_pwd 字段（rby_enable_start_app_by_password）
+                        .append("&allow=").append(if (allowInputPwd) 1 else 0)
                         .toString()
 
                     val url = URL("http://parent-manage.readboy.com/api/v1/uploadAllowPwd")
