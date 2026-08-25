@@ -441,3 +441,47 @@ ZaralynControl/
 ├── settings.gradle.kts
 └── AGENT.md
 ```
+---
+
+## 家长账号登录 + api-super 域（2026-08 新增）
+
+### 背景
+时间管控（set_time）与允许输入密码（change_allow_input_pwd）修改**只在手机端家长助手（api-super 域）有接口**，且强制 token（签名验证通过后 8002「token无效」拦截）。parent-manage/parentadmin 域无这两个接口（反编译+40+路径探测确认）。
+
+### 手机版 APK（逆向来源）
+- `~/object/ZaralynControl/logdir/jzzs-2.9.57.apk`（com.readboy.rbmanager 家长助手，263MB）
+- 反编译输出：`logdir/jzzs_high_smali/`
+- 详细接口笔记：`docs/api-super-interfaces.md`
+
+### 签名（SignUtil 新增）
+```
+getSn(uid8, ts, arg3) = uid8 + ts + MD5(ts + "2f6de49d30f32a4dbf67500b80bb7074" + arg3) + "com.readboy.rbmanager"
+登录时 arg3 = MD5("com.readboy.rbmanager")；已登录 arg3 = MD5(uid8)
+getUid8 = %08d 前补零；timestamp = 秒
+```
+
+### 认证流程
+1. 登录：`GET https://api-super.readboy.com/api/mobile_login`，sn=getSnForLogin + username=手机号 + password=MD5(密码) → `{uid, access_token, access_expire}`
+2. 之后所有请求带 `sn=getSnLoggedIn(uid)` + `token=access_token`
+3. access_expire 兼容时长/时间戳两种语义
+
+### 关键接口（全部需 token）
+| 功能 | 方法与参数 |
+|------|-----------|
+| 拉取时间管控 | GET `parent_control/time_setting`（sn+token+imei）|
+| 设置时间管控 | POST `parent_control/set_time`（sn+token+imei+[tid]+group+period_status+[periods]+[total_time]）|
+| 允许输入密码 | GET `parent_control/change_allow_input_pwd`（sn+token+imei+allow_input_pwd=0/1）|
+| 设备列表 | GET `parent_control/device_list`（sn+token+new_first=1+only_power=1）|
+| 修改/清除密码 | POST `parent_control/update_password`（sn+token+imei+new_pwd 明文+is_long_pwd）|
+
+### 代码结构
+- `network/SignUtil.kt`：getSn/getUid8/getSnLoggedIn/getSnForLogin
+- `network/LoginStore.kt`：登录状态持久化（uid/token/expire/手机号）
+- `network/ParentApiClient.kt`：mobile_login/time_setting/set_time/change_allow_input_pwd/device_list
+- `ui/SettingsFragment.kt`：登录卡片（手机号+密码+登录/登出）
+- `ui/TimeControlFragment.kt`：时间管控 tab（未登录变灰）
+- `ui/PasswordFragment.kt`：允许输入密码开关走 change_allow_input_pwd（未登录变灰）
+
+### 注意
+- 手机端 update_allow_pwd 参数名是 `allow_pwd`，平板端 uploadAllowPwd 参数名是 `allow`（不同域参数名不同）
+- 登录接口/签名密钥仅用于测试验证，未硬编码任何测试序列号进 App

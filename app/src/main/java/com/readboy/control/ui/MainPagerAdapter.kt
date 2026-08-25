@@ -9,6 +9,7 @@ class MainPagerAdapter(activity: FragmentActivity) : FragmentStateAdapter(activi
     private val fragments = listOf<Fragment>(
         ControlListFragment(),
         PasswordFragment(),
+        TimeControlFragment(),
         SyncFragment(),
         SettingsFragment()
     )

@@ -14,6 +14,8 @@ import com.readboy.control.db.MirrorDatabase
 import com.readboy.control.db.MirrorUserInfo
 import com.readboy.control.network.CloudSyncEngine
 import com.readboy.control.network.DeviceUtil
+import com.readboy.control.network.LoginStore
+import com.readboy.control.network.ParentApiClient
 import com.readboy.control.network.SignUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,11 +57,14 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 远程模式：按钮改为云端直达，允许输入密码开关通过 API 上传
+        // 远程模式：按钮改为云端直达
         if (DeviceUtil.isRemoteMode()) {
             btnChangePassword.text = "上传到云端"
             etPassword.hint = "输入新密码，点击上传到云端"
         }
+
+        // 允许输入密码开关：未登录禁用（需家长账号登录后经 api-super 修改）
+        refreshAllowInputPwdState(switchAllowInputPwd)
 
         // 修改密码 / 上传云端
         btnChangePassword.setOnClickListener {
@@ -71,24 +76,14 @@ class PasswordFragment : Fragment() {
             }
         }
 
-        // 允许输入密码（远程模式 → 云端 API；本地模式 → 镜像库）
+        // 允许输入密码：未登录禁用；登录后走 change_allow_input_pwd API（api-super 域，真改 allow_input_pwd）
         switchAllowInputPwd.setOnCheckedChangeListener { _, isChecked ->
-            if (DeviceUtil.isRemoteMode()) {
-                uploadAllowInputPwdToCloud(isChecked)
-            } else {
-                scope.launch {
-                    val db = MirrorDatabase.getInstance(requireContext())
-                    val info = db.userInfoDao().get()
-                    if (info != null) {
-                        db.userInfoDao().update(info.copy(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2))
-                    } else {
-                        db.userInfoDao().insert(
-                            MirrorUserInfo(is_allow_input_pwd = if (isChecked) 1 else 0, sync_status = 2)
-                        )
-                    }
-                    AppLogger.i("PasswordFragment", "允许输入密码: $isChecked")
-                }
+            if (!LoginStore.isLoggedIn(requireContext())) {
+                Toast.makeText(requireContext(), "请先在设置中登录家长账号", Toast.LENGTH_LONG).show()
+                switchAllowInputPwd.isChecked = !isChecked
+                return@setOnCheckedChangeListener
             }
+            uploadAllowInputPwd(isChecked)
         }
 
         // 云端拉取
@@ -217,56 +212,36 @@ class PasswordFragment : Fragment() {
         }
     }
 
-    private fun uploadAllowInputPwdToCloud(allowInputPwd: Boolean) {
+    /** 刷新允许输入密码开关可用性（未登录禁用变灰） */
+    private fun refreshAllowInputPwdState(switchAllowInputPwd: MaterialSwitch) {
+        val loggedIn = LoginStore.isLoggedIn(requireContext())
+        switchAllowInputPwd.isEnabled = loggedIn
+        switchAllowInputPwd.alpha = if (loggedIn) 1.0f else 0.4f
+    }
+
+    /**
+     * 允许输入密码 → api-super 域 change_allow_input_pwd（真改服务器 allow_input_pwd）
+     * 逆向：jzzs-2.9.57 ApiService updateAllowPassword → GET parent_control/change_allow_input_pwd
+     * 参数：sn + token + imei + allow_input_pwd=0/1
+     */
+    private fun uploadAllowInputPwd(allowInputPwd: Boolean) {
         scope.launch {
-            val imei = DeviceUtil.getEffectiveSerial() ?: return@launch
-            withContext(Dispatchers.IO) {
-                try {
-                    val p = SignUtil.getCommonParams(imei)
-                    val body = StringBuilder()
-                        .append("signature=").append(p["signature"])
-                        .append("&imei=").append(imei)
-                        .append("&timestamp=").append(p["timestamp"])
-                        .append("&app_id=").append(p["app_id"])
-                        // 反编译 UploadAllowPwdResponse：参数名是 allow（不是 allow_pwd）
-                        // 值对应服务器 allow_pwd 字段（rby_enable_start_app_by_password）
-                        .append("&allow=").append(if (allowInputPwd) 1 else 0)
-                        .toString()
-
-                    val url = URL("http://parent-manage.readboy.com/api/v1/uploadAllowPwd")
-                    val conn = url.openConnection() as HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.doOutput = true
-                    conn.connectTimeout = 15000
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-                    conn.outputStream.write(body.toByteArray(Charsets.UTF_8))
-
-                    val code = conn.responseCode
-                    val resp = if (code in 200..299) {
-                        conn.inputStream.bufferedReader().readText()
-                    } else {
-                        conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $code"
-                    }
-                    conn.disconnect()
-
-                    AppLogger.i("PasswordFragment", "允许输入密码上传: HTTP $code $resp")
-                    withContext(Dispatchers.Main) {
-                        val ok = try {
-                            val json = com.google.gson.JsonParser.parseString(resp).asJsonObject
-                            json.get("status")?.asInt == 1
-                        } catch (e: Exception) { false }
-                        if (ok) {
-                            Toast.makeText(requireContext(), "允许输入密码已上传到云端", Toast.LENGTH_LONG).show()
-                        } else {
-                            Toast.makeText(requireContext(), "上传结果: $resp", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    AppLogger.e("PasswordFragment", "允许输入密码上传失败: ${e.message}", e)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "上传失败: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
+            if (!LoginStore.isLoggedIn(requireContext())) {
+                Toast.makeText(requireContext(), "请先在设置中登录家长账号", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val imei = DeviceUtil.getEffectiveSerial()
+            if (imei.isNullOrEmpty()) {
+                Toast.makeText(requireContext(), "无法获取设备序列号，请在设置中填写", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val result = ParentApiClient.changeAllowInputPwd(requireContext(), imei, if (allowInputPwd) 1 else 0)
+            if (result.success) {
+                AppLogger.i("PasswordFragment", "允许输入密码已更新: $allowInputPwd")
+                Toast.makeText(requireContext(), "允许输入密码已更新", Toast.LENGTH_LONG).show()
+            } else {
+                AppLogger.e("PasswordFragment", "允许输入密码更新失败: ${result.message}")
+                Toast.makeText(requireContext(), "更新失败: ${result.message}", Toast.LENGTH_LONG).show()
             }
         }
     }

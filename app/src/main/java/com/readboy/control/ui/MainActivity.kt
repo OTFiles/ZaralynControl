@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     private val tabTitles = listOf(
         "管控列表",
         "密码管理",
+        "时间管控",
         "同步状态",
         "设置"
     )

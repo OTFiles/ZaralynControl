@@ -59,10 +59,46 @@ object SignUtil {
         return "signature=${getSign2(timestampMs)}&imei=$imei&timestamp=$seconds&app_id=$APP_ID2"
     }
 
+    /** MD5 小写 hex（密码加密用） */
+    fun md5Password(input: String): String = md5(input)
+
     /** MD5 小写 hex */
     private fun md5(input: String): String {
         val digest = MessageDigest.getInstance("MD5")
         val bytes = digest.digest(input.toByteArray(Charsets.UTF_8))
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    // ==================== api-super 域签名（家长助手手机端） ====================
+    // 反编译 com.readboy.rbmanager Util.smali getSn()
+
+    /** api-super 域密钥 */
+    private const val RB_MANAGER_SECRET = "2f6de49d30f32a4dbf67500b80bb7074"
+    private const val RB_MANAGER_PACKAGE = "com.readboy.rbmanager"
+
+    /**
+     * getUid8：8 位前补零
+     */
+    fun getUid8(uid: Long): String = String.format("%08d", uid)
+
+    /**
+     * getSn：uid8 + ts + MD5(ts + SECRET + arg3) + 包名
+     * @param arg3 登录时 = MD5(包名)；已登录时 = MD5(uid8)
+     */
+    fun getSn(uid8: String, timestampMs: Long, arg3: String): String {
+        val seconds = timestampMs / 1000
+        val inner = md5("$seconds$RB_MANAGER_SECRET$arg3")
+        return "$uid8$seconds$inner$RB_MANAGER_PACKAGE"
+    }
+
+    /** 已登录 getSn：arg3 = MD5(uid8) */
+    fun getSnLoggedIn(uid: Long, timestampMs: Long = System.currentTimeMillis()): String {
+        val uid8 = getUid8(uid)
+        return getSn(uid8, timestampMs, md5(uid8))
+    }
+
+    /** 登录时 getSn：arg3 = MD5(包名) */
+    fun getSnForLogin(timestampMs: Long = System.currentTimeMillis()): String {
+        return getSn(getUid8(0), timestampMs, md5(RB_MANAGER_PACKAGE))
     }
 }
