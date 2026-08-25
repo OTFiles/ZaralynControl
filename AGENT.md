@@ -179,6 +179,15 @@ POST http://parent-manage.readboy.com/api/v1/password/upload
 Body: signature=...&imei=...&timestamp=...&app_id=parent-manage&password=...&is_long_pwd=0/1
 ```
 
+### 允许密码上传 (uploadAllowPwd) — 参数名是 allow！
+
+```
+POST http://parent-manage.readboy.com/api/v1/uploadAllowPwd
+Body: signature={getSign2}&imei=...&timestamp=秒&app_id=parent-manage&allow=1/0
+```
+
+**⚠️ 反编译 UploadAllowPwdResponse 确认：参数名是 `allow`（不是 allow_pwd！）**，值对应服务器 `allow_pwd` 字段（rby_enable_start_app_by_password 应用启动密码）。传 `allow_pwd` 服务器返回 status:1 但不生效。
+
 ### 解绑 (cancel_bindings)
 
 ```
