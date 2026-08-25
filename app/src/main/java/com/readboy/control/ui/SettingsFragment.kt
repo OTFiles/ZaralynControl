@@ -59,6 +59,12 @@ class SettingsFragment : Fragment() {
         val btnLogout = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnLogout)
         val tvLoginStatus = view.findViewById<TextView>(R.id.tvLoginStatus)
 
+        // 手动 Token UI
+        val etTokenUid = view.findViewById<TextInputEditText>(R.id.etTokenUid)
+        val etTokenValue = view.findViewById<TextInputEditText>(R.id.etTokenValue)
+        val btnSaveToken = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveToken)
+        val tvTokenStatus = view.findViewById<TextView>(R.id.tvTokenStatus)
+
         // 自动同步
         val autoSync = prefs.getBoolean("auto_sync_enabled", true)
         switchAutoSync.isChecked = autoSync
@@ -110,6 +116,7 @@ class SettingsFragment : Fragment() {
                     Toast.makeText(requireContext(), "登录成功 (uid=${result.uid})", Toast.LENGTH_LONG).show()
                     AppLogger.i("Settings", "家长账号登录成功: uid=${result.uid}")
                     etLoginPassword.text?.clear()
+                    tvTokenStatus.text = ""
                 } else {
                     Toast.makeText(requireContext(), result.message, Toast.LENGTH_LONG).show()
                     AppLogger.e("Settings", "登录失败: ${result.message}")
@@ -126,6 +133,58 @@ class SettingsFragment : Fragment() {
             Toast.makeText(requireContext(), "已退出登录", Toast.LENGTH_SHORT).show()
             AppLogger.i("Settings", "退出家长账号登录")
             updateLoginUi(etLoginMobile, etLoginPassword, btnLogin, btnLogout, tvLoginStatus)
+            tvTokenStatus.text = ""
+        }
+
+        // 保存手动填写的 Token（uid + access_token）——保存时自动验证，验证失败回滚
+        btnSaveToken.setOnClickListener {
+            val uidStr = etTokenUid.text?.toString()?.trim() ?: ""
+            val token = etTokenValue.text?.toString()?.trim() ?: ""
+            if (uidStr.isEmpty() || token.isEmpty()) {
+                Toast.makeText(requireContext(), "请填写 uid 和 access_token", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val uid = uidStr.toLongOrNull()
+            if (uid == null || uid <= 0) {
+                Toast.makeText(requireContext(), "uid 格式不正确（应为数字）", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // 记住原登录状态，验证失败时回滚
+            val oldUid = LoginStore.getUid(requireContext())
+            val oldToken = LoginStore.getToken(requireContext())
+            val oldExpire = LoginStore.getExpireAt(requireContext())
+            val oldMobile = LoginStore.getMobile(requireContext())
+
+            btnSaveToken.isEnabled = false
+            btnSaveToken.text = "验证中..."
+            scope.launch {
+                // 临时保存以便 baseParams 取 token 验证
+                LoginStore.saveLogin(requireContext(), uid, token, 0L, "")
+                val result = ParentApiClient.getDeviceList(requireContext())
+                if (result.success) {
+                    val deviceCount = result.response?.data?.size ?: 0
+                    // 验证通过，正式保存（保留输入手机号为空）
+                    LoginStore.saveLogin(requireContext(), uid, token, 0L, "")
+                    tvTokenStatus.text = "Token 验证通过，绑定设备 $deviceCount 台"
+                    Toast.makeText(requireContext(), "Token 验证通过，已保存", Toast.LENGTH_LONG).show()
+                    AppLogger.i("Settings", "手动 Token 验证成功: uid=$uid, 设备数=$deviceCount")
+                    etTokenValue.text?.clear()
+                } else {
+                    tvTokenStatus.text = "Token 无效: ${result.message}"
+                    Toast.makeText(requireContext(), "Token 无效: ${result.message}", Toast.LENGTH_LONG).show()
+                    AppLogger.e("Settings", "手动 Token 验证失败: ${result.message}")
+                    // 回滚原登录状态
+                    if (oldUid > 0 && oldToken.isNotEmpty()) {
+                        LoginStore.saveLogin(requireContext(), oldUid, oldToken, oldExpire, oldMobile)
+                    } else {
+                        LoginStore.clear(requireContext())
+                    }
+                }
+                updateLoginUi(etLoginMobile, etLoginPassword, btnLogin, btnLogout, tvLoginStatus)
+                btnSaveToken.isEnabled = true
+                btnSaveToken.text = "保存并验证 Token"
+            }
         }
 
         // 监听器
