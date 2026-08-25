@@ -59,7 +59,7 @@ object ParentApiClient {
 
             val uid = resp.uid.toLongOrNull() ?: return@withContext LoginResult(false, "uid 解析失败: ${resp.uid}")
             // access_expire 可能是过期时间戳(秒)或时长(秒)，兼容处理
-            val expireSec = resp.access_expire ?: 0
+            val expireSec = (resp.access_expire ?: 0).toLong()
             val nowSec = System.currentTimeMillis() / 1000
             val expireAt = if (expireSec > 1000000000L) expireSec else nowSec + expireSec
 
