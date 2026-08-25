@@ -32,7 +32,7 @@ object ParentApiClient {
      * 账号密码登录（mobile_login，无需验证码）
      * @return 登录结果（uid/token/过期时间）
      */
-    suspend fun login(mobile: String, password: String): LoginResult = withContext(Dispatchers.IO) {
+    suspend fun login(context: android.content.Context, mobile: String, password: String): LoginResult = withContext(Dispatchers.IO) {
         try {
             val timestampMs = System.currentTimeMillis()
             val sn = SignUtil.getSnForLogin(timestampMs)
@@ -40,6 +40,7 @@ object ParentApiClient {
                 .append("sn=").append(urlEncode(sn))
                 .append("&username=").append(urlEncode(mobile))
                 .append("&password=").append(urlEncode(SignUtil.md5Password(password)))
+                .append("&ua=").append(urlEncode(buildUa(context)))
                 .toString()
 
             val (code, body) = httpGet("$BASE/mobile_login", query)
@@ -165,14 +166,32 @@ object ParentApiClient {
 
     // ==================== 通用 ====================
 
-    /** 已登录基础参数：sn + token */
+    /** 已登录基础参数：sn + token + ua */
     private fun baseParams(context: android.content.Context, timestampMs: Long = System.currentTimeMillis()): Map<String, String> {
         val uid = LoginStore.getUid(context)
         val token = LoginStore.getToken(context)
         return mapOf(
             "sn" to SignUtil.getSnLoggedIn(uid, timestampMs),
-            "token" to token
+            "token" to token,
+            "ua" to buildUa(context)
         )
+    }
+
+    /**
+     * 构建 ua 参数（反编译 Util.getOauthUAPro）：
+     * 1/android<系统版本>/<机型>/<包名>/<版本号>/<设备UUID>
+     */
+    private fun buildUa(context: android.content.Context): String {
+        val version = android.os.Build.VERSION.RELEASE
+        val model = android.os.Build.MODEL ?: ""
+        val pkg = context.packageName
+        val versionName = try {
+            context.packageManager.getPackageInfo(pkg, 0).versionName ?: "1"
+        } catch (e: Exception) { "1" }
+        val uuid = try {
+            android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: ""
+        } catch (e: Exception) { "" }
+        return "1/android$version/$model/$pkg/$versionName/$uuid"
     }
 
     private fun buildQuery(params: Map<String, String>): String =

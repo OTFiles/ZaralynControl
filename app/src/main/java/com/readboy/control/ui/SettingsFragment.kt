@@ -98,7 +98,7 @@ class SettingsFragment : Fragment() {
             btnLogin.isEnabled = false
             btnLogin.text = "登录中..."
             scope.launch {
-                val result = ParentApiClient.login(mobile, password)
+                val result = ParentApiClient.login(requireContext(), mobile, password)
                 if (result.success) {
                     LoginStore.saveLogin(
                         requireContext(),
