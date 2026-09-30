@@ -1,6 +1,11 @@
 package com.readboy.control.network
 
+import android.util.Base64
 import java.security.MessageDigest
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * 家长管理签名算法（反编译自 Sign.smali）
@@ -100,5 +105,49 @@ object SignUtil {
     /** 登录时 getSn：arg3 = MD5(包名) */
     fun getSnForLogin(timestampMs: Long = System.currentTimeMillis()): String {
         return getSn(getUid8(0), timestampMs, md5(RB_MANAGER_PACKAGE))
+    }
+
+    // ==================== 验证码登录：手机号 AES 加密 ====================
+    // 反编译 com.readboy.rbmanager.util.AESUtil + JMBase64
+
+    /**
+     * AES-256-CBC(PKCS5Padding) 加密手机号，返回 URL-safe Base64（IV 前置）
+     *
+     * key = RB_MANAGER_SECRET 的 UTF-8 字节（32 字节 → AES-256）
+     * IV = 随机 16 字节，拼接在密文之前
+     * 输出 = JMBase64(IV + cipher)，字符表 A-Za-z0-9-_，保留 '=' padding
+     */
+    fun aesEncryptForQuery(plain: String): String {
+        val keySpec = SecretKeySpec(RB_MANAGER_SECRET.toByteArray(Charsets.UTF_8), "AES")
+        val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, IvParameterSpec(iv))
+        val cipherText = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
+        val combined = ByteArray(iv.size + cipherText.size)
+        System.arraycopy(iv, 0, combined, 0, iv.size)
+        System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
+        // URL_SAFE 使用 -_ 字符表并保留 '=' padding（与 JMBase64 一致）
+        return Base64.encodeToString(combined, Base64.NO_WRAP or Base64.URL_SAFE)
+    }
+
+    /**
+     * 解密 encrypt=1 接口的加密响应体
+     *
+     * 响应 = URL-safe Base64(IV(16B) + AES-256-CBC 密文)，key 同上
+     * @return 解密后的 UTF-8 字符串，失败返回 null
+     */
+    fun aesDecryptFromBase64(data: String): String? {
+        return try {
+            val raw = Base64.decode(data.trim(), Base64.NO_WRAP or Base64.URL_SAFE)
+            if (raw.size <= 16) return null
+            val keySpec = SecretKeySpec(RB_MANAGER_SECRET.toByteArray(Charsets.UTF_8), "AES")
+            val iv = raw.copyOfRange(0, 16)
+            val cipherText = raw.copyOfRange(16, raw.size)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, IvParameterSpec(iv))
+            String(cipher.doFinal(cipherText), Charsets.UTF_8)
+        } catch (e: Exception) {
+            null
+        }
     }
 }

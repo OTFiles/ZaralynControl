@@ -22,6 +22,7 @@ object ParentApiClient {
 
     private const val TAG = "ParentApi"
     private const val BASE = "https://api-super.readboy.com/api"
+    private const val ACCOUNT_BASE = "https://account.readboy.com"
     private const val MAX_RETRY = 3
 
     private val gson = Gson()
@@ -39,7 +40,7 @@ object ParentApiClient {
             val query = StringBuilder()
                 .append("sn=").append(urlEncode(sn))
                 .append("&username=").append(urlEncode(mobile))
-                .append("&password=").append(urlEncode(SignUtil.md5Password(password)))
+                .append("&password=").append(urlEncode(SignUtil.md5Password(password.trim())))
                 .append("&ua=").append(urlEncode(buildUa(context)))
                 .toString()
 
@@ -70,6 +71,138 @@ object ParentApiClient {
             AppLogger.e(TAG, "登录异常: ${e.message}", e)
             LoginResult(false, "登录异常: ${e.message}")
         }
+    }
+
+    // ==================== 验证码登录 ====================
+
+    /**
+     * 发送短信验证码（account 域）
+     *
+     * GET https://account.readboy.com/mobile/verify
+     *   sn=getSn("00000000", ts, MD5(包名))
+     *   mobile=手机号（encrypt=true 时 AES 加密）
+     *   type=1&country_code=86&encrypt=1&ua=...
+     *
+     * 响应：{errno, errmsg, serial, sms_result}（encrypt 时整体 AES 加密）
+     * 其中 serial 用于后续验证码登录/注册
+     */
+    suspend fun sendVerifyCode(context: android.content.Context, mobile: String, countryCode: Int = 86): VerifyCodeResult = withContext(Dispatchers.IO) {
+        // 优先 AES 加密版（贴近原版行为），失败回退明文版
+        val encrypted = sendVerifyCodeInternal(context, mobile, countryCode, encrypt = true)
+        if (encrypted.success) return@withContext encrypted
+        AppLogger.w(TAG, "加密版发送验证码失败（${encrypted.message}），尝试明文版")
+        val plain = sendVerifyCodeInternal(context, mobile, countryCode, encrypt = false)
+        if (plain.success) plain else encrypted
+    }
+
+    private fun sendVerifyCodeInternal(
+        context: android.content.Context,
+        mobile: String,
+        countryCode: Int,
+        encrypt: Boolean
+    ): VerifyCodeResult {
+        return try {
+            val timestampMs = System.currentTimeMillis()
+            val sb = StringBuilder()
+                .append("sn=").append(urlEncode(SignUtil.getSnForLogin(timestampMs)))
+                .append("&mobile=").append(urlEncode(if (encrypt) SignUtil.aesEncryptForQuery(mobile) else mobile))
+                .append("&type=1")
+                .append("&country_code=").append(countryCode)
+            if (encrypt) sb.append("&encrypt=1")
+            sb.append("&ua=").append(urlEncode(buildUa(context)))
+
+            val (code, rawBody) = httpGet("$ACCOUNT_BASE/mobile/verify", sb.toString())
+            AppLogger.i(TAG, "发送验证码响应(encrypt=$encrypt): HTTP $code ${rawBody.take(300)}")
+
+            if (code !in 200..299) return VerifyCodeResult(false, "HTTP $code")
+
+            val body = maybeDecrypt(rawBody)
+            val resp = try { gson.fromJson(body, VerifyCodeResponse::class.java) } catch (e: Exception) { null }
+                ?: return VerifyCodeResult(false, "响应解析失败: ${body.take(200)}")
+            if (resp.errno != null && resp.errno != 0) {
+                return VerifyCodeResult(false, resp.errmsg ?: "errno=${resp.errno}")
+            }
+            if (resp.serial.isNullOrBlank()) {
+                return VerifyCodeResult(false, resp.errmsg ?: "未取得 serial: ${body.take(200)}")
+            }
+            AppLogger.i(TAG, "验证码已发送: serial=${resp.serial}, sms_result=${resp.sms_result}")
+            VerifyCodeResult(true, "验证码已发送", resp.serial ?: "")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "发送验证码异常: ${e.message}", e)
+            VerifyCodeResult(false, "发送异常: ${e.message}")
+        }
+    }
+
+    /**
+     * 验证码登录 / 注册
+     *
+     * 优先明文版 GET api-super.readboy.com/api/mobile_reg_login
+     *   sn=getSn("00000000", ts, MD5(包名))&mobile=手机号&serial=<发送验证码返回>&verify=<验证码>&ua=...
+     * 失败时回退 crypto 版 crypto/mobile_reg_login（mobile AES 加密 + encrypt=1）
+     */
+    suspend fun loginWithVerifyCode(
+        context: android.content.Context,
+        mobile: String,
+        verify: String,
+        serial: String
+    ): LoginResult = withContext(Dispatchers.IO) {
+        val plain = loginWithVerifyCodeInternal(context, mobile, verify, serial, encrypt = false)
+        if (plain.success) return@withContext plain
+        AppLogger.w(TAG, "明文版验证码登录失败（${plain.message}），尝试加密版")
+        val encrypted = loginWithVerifyCodeInternal(context, mobile, verify, serial, encrypt = true)
+        if (encrypted.success) encrypted else plain
+    }
+
+    private fun loginWithVerifyCodeInternal(
+        context: android.content.Context,
+        mobile: String,
+        verify: String,
+        serial: String,
+        encrypt: Boolean
+    ): LoginResult {
+        return try {
+            val timestampMs = System.currentTimeMillis()
+            val sb = StringBuilder()
+                .append("sn=").append(urlEncode(SignUtil.getSnForLogin(timestampMs)))
+                .append("&mobile=").append(urlEncode(if (encrypt) SignUtil.aesEncryptForQuery(mobile) else mobile))
+            if (encrypt) sb.append("&encrypt=1")
+            sb.append("&serial=").append(urlEncode(serial))
+            sb.append("&verify=").append(urlEncode(verify))
+            sb.append("&ua=").append(urlEncode(buildUa(context)))
+
+            val path = if (encrypt) "$BASE/crypto/mobile_reg_login" else "$BASE/mobile_reg_login"
+            val (code, rawBody) = httpGet(path, sb.toString())
+            AppLogger.i(TAG, "验证码登录响应(encrypt=$encrypt): HTTP $code ${rawBody.take(300)}")
+
+            if (code !in 200..299) return LoginResult(false, "HTTP $code")
+
+            val body = maybeDecrypt(rawBody)
+            val resp = try { gson.fromJson(body, MobileRegisterResponse::class.java) } catch (e: Exception) { null }
+                ?: return LoginResult(false, "响应解析失败: ${body.take(200)}")
+            if (resp.errno != null && resp.errno != 0) {
+                return LoginResult(false, resp.errmsg ?: "errno=${resp.errno}")
+            }
+            if (resp.uid.isNullOrBlank() || resp.access_token.isNullOrBlank()) {
+                return LoginResult(false, resp.errmsg ?: body.take(200))
+            }
+            val uid = resp.uid.toLongOrNull() ?: return LoginResult(false, "uid 解析失败: ${resp.uid}")
+            val expireSec = (resp.access_expire ?: 0).toLong()
+            val nowSec = System.currentTimeMillis() / 1000
+            val expireAt = if (expireSec > 1000000000L) expireSec else nowSec + expireSec
+
+            AppLogger.i(TAG, "验证码登录成功: uid=$uid mobile=$mobile token=${resp.access_token.take(8)}... expireAt=$expireAt")
+            LoginResult(true, "登录成功", uid = uid, token = resp.access_token, expireAt = expireAt)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "验证码登录异常: ${e.message}", e)
+            LoginResult(false, "登录异常: ${e.message}")
+        }
+    }
+
+    /** 响应体可能是明文 JSON，也可能是 AES 加密后 Base64（encrypt=1） */
+    private fun maybeDecrypt(body: String): String {
+        val t = body.trim()
+        if (t.startsWith("{") || t.startsWith("[")) return t
+        return SignUtil.aesDecryptFromBase64(t) ?: t
     }
 
     // ==================== 时间管控 ====================
@@ -273,6 +406,14 @@ object ParentApiClient {
         val registered: Int? = null
     )
 
+    data class VerifyCodeResponse(
+        val errno: Int? = null,
+        val errmsg: String? = null,
+        val serial: String? = null,
+        @SerializedName("sms_result") val sms_result: String? = null,
+        val desp: String? = null
+    )
+
     data class SimpleResp(
         val status: Int? = null,
         val errno: Int? = null,
@@ -349,5 +490,11 @@ object ParentApiClient {
         val success: Boolean,
         val message: String,
         val response: DeviceListResponse? = null
+    )
+
+    data class VerifyCodeResult(
+        val success: Boolean,
+        val message: String,
+        val serial: String = ""
     )
 }

@@ -33,6 +33,10 @@ class SettingsFragment : Fragment() {
     private lateinit var prefs: SharedPreferences
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /** 发送验证码接口返回的 serial（用于验证码登录/注册） */
+    private var verifySerial: String = ""
+    private var countdownJob: kotlinx.coroutines.Job? = null
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -64,6 +68,13 @@ class SettingsFragment : Fragment() {
         val etTokenValue = view.findViewById<TextInputEditText>(R.id.etTokenValue)
         val btnSaveToken = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveToken)
         val tvTokenStatus = view.findViewById<TextView>(R.id.tvTokenStatus)
+
+        // 验证码登录 UI
+        val etVerifyMobile = view.findViewById<TextInputEditText>(R.id.etVerifyMobile)
+        val etVerifyCode = view.findViewById<TextInputEditText>(R.id.etVerifyCode)
+        val btnSendCode = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSendCode)
+        val btnVerifyLogin = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnVerifyLogin)
+        val tvVerifyStatus = view.findViewById<TextView>(R.id.tvVerifyStatus)
 
         // 自动同步
         val autoSync = prefs.getBoolean("auto_sync_enabled", true)
@@ -134,6 +145,77 @@ class SettingsFragment : Fragment() {
             AppLogger.i("Settings", "退出家长账号登录")
             updateLoginUi(etLoginMobile, etLoginPassword, btnLogin, btnLogout, tvLoginStatus)
             tvTokenStatus.text = ""
+            tvVerifyStatus.text = ""
+        }
+
+        // 发送短信验证码（account 域，手机号 AES 加密）
+        btnSendCode.setOnClickListener {
+            val mobile = etVerifyMobile.text?.toString()?.trim() ?: ""
+            if (mobile.isEmpty()) {
+                Toast.makeText(requireContext(), "请输入家长手机号", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!mobile.matches(Regex("^1\\d{10}$"))) {
+                Toast.makeText(requireContext(), "手机号格式不正确", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            btnSendCode.isEnabled = false
+            btnSendCode.text = "发送中..."
+            tvVerifyStatus.text = "正在发送验证码..."
+            scope.launch {
+                val result = ParentApiClient.sendVerifyCode(requireContext(), mobile)
+                if (result.success) {
+                    verifySerial = result.serial
+                    tvVerifyStatus.text = "验证码已发送，请查看短信（serial=${result.serial}）"
+                    Toast.makeText(requireContext(), "验证码已发送", Toast.LENGTH_LONG).show()
+                    AppLogger.i("Settings", "验证码已发送: mobile=$mobile serial=${result.serial}")
+                    startSendCodeCountdown(btnSendCode)
+                } else {
+                    tvVerifyStatus.text = "发送失败: ${result.message}"
+                    Toast.makeText(requireContext(), "发送失败: ${result.message}", Toast.LENGTH_LONG).show()
+                    AppLogger.e("Settings", "发送验证码失败: ${result.message}")
+                    btnSendCode.isEnabled = true
+                    btnSendCode.text = "发送验证码"
+                }
+            }
+        }
+
+        // 验证码登录
+        btnVerifyLogin.setOnClickListener {
+            val mobile = etVerifyMobile.text?.toString()?.trim() ?: ""
+            val code = etVerifyCode.text?.toString()?.trim() ?: ""
+            if (mobile.isEmpty() || code.isEmpty()) {
+                Toast.makeText(requireContext(), "请填写手机号和验证码", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (verifySerial.isEmpty()) {
+                Toast.makeText(requireContext(), "请先点击“发送验证码”", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            btnVerifyLogin.isEnabled = false
+            btnVerifyLogin.text = "登录中..."
+            tvVerifyStatus.text = "正在验证码登录..."
+            scope.launch {
+                val result = ParentApiClient.loginWithVerifyCode(requireContext(), mobile, code, verifySerial)
+                if (result.success) {
+                    LoginStore.saveLogin(requireContext(), result.uid, result.token, result.expireAt, mobile)
+                    tvVerifyStatus.text = "验证码登录成功 (uid=${result.uid})"
+                    Toast.makeText(requireContext(), "验证码登录成功 (uid=${result.uid})", Toast.LENGTH_LONG).show()
+                    AppLogger.i("Settings", "验证码登录成功: uid=${result.uid}")
+                    etVerifyCode.text?.clear()
+                    etLoginPassword.text?.clear()
+                    tvTokenStatus.text = ""
+                    updateLoginUi(etLoginMobile, etLoginPassword, btnLogin, btnLogout, tvLoginStatus)
+                } else {
+                    tvVerifyStatus.text = "登录失败: ${result.message}"
+                    Toast.makeText(requireContext(), "登录失败: ${result.message}", Toast.LENGTH_LONG).show()
+                    AppLogger.e("Settings", "验证码登录失败: ${result.message}")
+                }
+                btnVerifyLogin.isEnabled = true
+                btnVerifyLogin.text = "验证码登录"
+            }
         }
 
         // 保存手动填写的 Token（uid + access_token）——保存时自动验证，验证失败回滚
@@ -275,8 +357,25 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    /**
+     * 发送验证码后的 60 秒倒计时（防重复发送）
+     */
+    private fun startSendCodeCountdown(btn: com.google.android.material.button.MaterialButton) {
+        countdownJob?.cancel()
+        countdownJob = scope.launch {
+            for (sec in 60 downTo 1) {
+                btn.isEnabled = false
+                btn.text = "${sec}s 后重发"
+                kotlinx.coroutines.delay(1000)
+            }
+            btn.isEnabled = true
+            btn.text = "发送验证码"
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        countdownJob?.cancel()
         scope.cancel()
     }
 }

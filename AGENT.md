@@ -461,9 +461,18 @@ getUid8 = %08d 前补零；timestamp = 秒
 ```
 
 ### 认证流程
-1. 登录：`GET https://api-super.readboy.com/api/mobile_login`，sn=getSnForLogin + username=手机号 + password=MD5(密码) → `{uid, access_token, access_expire}`
-2. 之后所有请求带 `sn=getSnLoggedIn(uid)` + `token=access_token`
-3. access_expire 兼容时长/时间戳两种语义
+1. 登录（密码）：`GET https://api-super.readboy.com/api/mobile_login`，sn=getSnForLogin + username=手机号 + password=MD5(密码.trim()) → `{uid, access_token, access_expire}`
+   - **密码加密已核对无误**：反编译 `MD5Util.getMd5` = 标准 MD5 小写 hex；`MobileLoginActivity.commit()` 里密码先 trim 再 MD5
+   - 服务端 errno=7129「密码错误」对不存在账号也返回同错（防枚举），无法用 curl 区分
+2. 验证码登录（无需密码，2026-08 新增）：
+   - 发送：`GET https://account.readboy.com/mobile/verify`（sn=getSnForLogin + mobile=手机号 + type=1 + country_code=86 [+ encrypt=1]）→ `{errno, errmsg, serial, sms_result}`
+   - 登录：`GET https://api-super.readboy.com/api/mobile_reg_login`（sn + mobile + serial + verify + ua）→ MobileRegisterResponse
+   - encrypt 变体：`crypto/mobile_reg_login`（mobile=AES 加密 + encrypt=1，响应整体 AES 加密）
+   - AES：`AES/CBC/PKCS5Padding`，key = "2f6de49d30f32a4dbf67500b80bb7074" 的 UTF-8 字节（32B→AES-256），IV 随机 16B 前置，输出 JMBase64（URL-safe 保留 = padding）
+   - serial 由发送验证码接口返回（8 位数字），验证码登录必填；缺少 serial → HTTP 500
+3. 之后所有请求带 `sn=getSnLoggedIn(uid)` + `token=access_token`
+4. access_expire 兼容时长/时间戳两种语义
+5. 登录方式三选一：密码 / 验证码 / 手动填 uid+access_token（设置页均有）
 
 ### 关键接口（全部需 token）
 | 功能 | 方法与参数 |
@@ -475,10 +484,10 @@ getUid8 = %08d 前补零；timestamp = 秒
 | 修改/清除密码 | POST `parent_control/update_password`（sn+token+imei+new_pwd 明文+is_long_pwd）|
 
 ### 代码结构
-- `network/SignUtil.kt`：getSn/getUid8/getSnLoggedIn/getSnForLogin
+- `network/SignUtil.kt`：getSn/getUid8/getSnLoggedIn/getSnForLogin + aesEncryptForQuery/aesDecryptFromBase64
 - `network/LoginStore.kt`：登录状态持久化（uid/token/expire/手机号）
-- `network/ParentApiClient.kt`：mobile_login/time_setting/set_time/change_allow_input_pwd/device_list
-- `ui/SettingsFragment.kt`：登录卡片（手机号+密码+登录/登出）
+- `network/ParentApiClient.kt`：mobile_login/mobile_reg_login(验证码)/sendVerifyCode/time_setting/set_time/change_allow_input_pwd/device_list
+- `ui/SettingsFragment.kt`：登录卡片（密码登录 / 验证码登录 / 手动 Token，三选一）
 - `ui/TimeControlFragment.kt`：时间管控 tab（未登录变灰）
 - `ui/PasswordFragment.kt`：允许输入密码开关走 change_allow_input_pwd（未登录变灰）
 
